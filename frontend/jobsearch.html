@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+
+    <!-- Theme initialization - prevent flash of wrong theme -->
+    <script>
+        (function() {
+            var theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+
+    <title>JobHunt | Application Pipeline Dashboard</title>
+    <meta name="description" content="Dashboard for a durable, human-in-the-loop job-application pipeline: review LLM-scored matches, approve generated outreach, and track Temporal-orchestrated follow-ups.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+
+    <!-- Critical inline styles for fast initial render -->
+    <style>
+        /* Prevent FOUC */
+        html { visibility: visible; opacity: 1; }
+
+        /* Initial loading state */
+        .initial-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+
+        .initial-loader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loader-content {
+            text-align: center;
+        }
+
+        .loader-logo {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .loader-text {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1.5rem;
+        }
+
+        .loader-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- Initial Loading Screen -->
+    <div class="initial-loader" id="initial-loader">
+        <div class="loader-content">
+            <div class="loader-logo">💼</div>
+            <div class="loader-text">JobHunt</div>
+            <div class="loader-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Main Application Container -->
+    <div class="app-container">
+        <!-- ==================== HEADER ==================== -->
+        <header class="app-header">
+            <div class="header-left">
+                <!-- Logo -->
+                <a href="/" class="app-logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="20" height="14" x="2" y="7" rx="2" ry="2"/>
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                    </svg>
+                    <span>JobHunt</span>
+                </a>
+
+                <!-- Stats Bar -->
+                <div id="stats-bar" class="stats-bar">
+                    <div class="stat-item">
+                        <span class="stat-value">--</span>
+                        <span class="stat-label">Jobs</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-value highlight">--</span>
+                        <span class="stat-label">Applications</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-value success">--</span>
+                        <span class="stat-label">Interviews</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-value">--%</span>
+                        <span class="stat-label">Response</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <!-- Run Discovery Button -->
+                <button class="btn btn-primary" onclick="runDiscovery()" id="discovery-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                        <path d="M21 3v5h-5"/>
+                        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                        <path d="M3 21v-5h5"/>
+                    </svg>
+                    <span class="btn-text">Run Discovery</span>
+                </button>
+
+                <!-- Theme Toggle -->
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                    <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"/>
+                        <path d="M12 2v2"/>
+                        <path d="M12 20v2"/>
+                        <path d="m4.93 4.93 1.41 1.41"/>
+                        <path d="m17.66 17.66 1.41 1.41"/>
+                        <path d="M2 12h2"/>
+                        <path d="M20 12h2"/>
+                        <path d="m6.34 17.66-1.41 1.41"/>
+                        <path d="m19.07 4.93-1.41 1.41"/>
+                    </svg>
+                    <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+                    </svg>
+                </button>
+
+                <!-- Resume Button -->
+                <button class="btn btn-secondary" onclick="openResumeModal()" title="Manage Resume">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" x2="8" y1="13" y2="13"/>
+                        <line x1="16" x2="8" y1="17" y2="17"/>
+                        <line x1="10" x2="8" y1="9" y2="9"/>
+                    </svg>
+                    <span>Resume</span>
+                </button>
+
+                <!-- Settings Button -->
+                <button class="btn btn-icon btn-secondary" onclick="openSettings()" title="Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- ==================== MAIN CONTENT (3-Column Layout) ==================== -->
+        <main class="main-content">
+            <!-- ==================== LEFT SIDEBAR - JOB LIST ==================== -->
+            <aside class="panel job-list-panel">
+                <!-- Search & Filter Bar -->
+                <div class="search-filter-bar">
+                    <!-- Search Box -->
+                    <div class="search-box">
+                        <input type="text"
+                               id="search-input"
+                               placeholder="Search jobs, companies..."
+                               autocomplete="off"
+                               spellcheck="false">
+                        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="m21 21-4.35-4.35"/>
+                        </svg>
+                        <button class="search-clear" id="search-clear" type="button" aria-label="Clear search">
+                            <span style="position: absolute; width: 10px; height: 2px; background: var(--bg-surface); transform: rotate(45deg);"></span>
+                            <span style="position: absolute; width: 10px; height: 2px; background: var(--bg-surface); transform: rotate(-45deg);"></span>
+                        </button>
+                    </div>
+
+                    <!-- Filter Tabs -->
+                    <div id="filter-tabs" class="filter-tabs">
+                        <button class="filter-tab active" onclick="onFilterChange('status', 'all')">
+                            All <span class="tab-count">--</span>
+                        </button>
+                        <button class="filter-tab" onclick="onFilterChange('status', 'new')">
+                            New
+                        </button>
+                        <button class="filter-tab" onclick="onFilterChange('status', 'interested')">
+                            Interested
+                        </button>
+                        <button class="filter-tab" onclick="onFilterChange('status', 'applied')">
+                            Applied
+                        </button>
+                        <button class="filter-tab" onclick="onFilterChange('status', 'interviewing')">
+                            Interviewing
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel Header -->
+                <div class="panel-header">
+                    <span class="panel-title">
+                        Jobs
+                        <span class="count" id="job-count">--</span>
+                    </span>
+                    <button class="btn btn-sm btn-ghost" onclick="refreshJobs()" title="Refresh">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                            <path d="M21 3v5h-5"/>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                            <path d="M3 21v-5h5"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Job List -->
+                <div class="panel-body" id="job-list">
+                    <!-- Loading skeleton -->
+                    <div class="job-list">
+                        <div class="job-card" style="pointer-events: none;">
+                            <div class="job-card-header">
+                                <div class="skeleton skeleton-text" style="width: 70%; height: 18px;"></div>
+                                <div class="skeleton" style="width: 42px; height: 24px; border-radius: 9999px;"></div>
+                            </div>
+                            <div class="skeleton skeleton-text" style="width: 50%;"></div>
+                            <div class="skeleton skeleton-text" style="width: 40%;"></div>
+                            <div class="skeleton skeleton-text" style="width: 30%; margin-top: 8px;"></div>
+                            <div class="job-card-footer" style="margin-top: 12px;">
+                                <div class="skeleton" style="width: 60px; height: 20px;"></div>
+                                <div class="skeleton" style="width: 50px; height: 14px;"></div>
+                            </div>
+                        </div>
+                        <div class="job-card" style="pointer-events: none;">
+                            <div class="job-card-header">
+                                <div class="skeleton skeleton-text" style="width: 60%; height: 18px;"></div>
+                                <div class="skeleton" style="width: 42px; height: 24px; border-radius: 9999px;"></div>
+                            </div>
+                            <div class="skeleton skeleton-text" style="width: 45%;"></div>
+                            <div class="skeleton skeleton-text" style="width: 35%;"></div>
+                            <div class="skeleton skeleton-text" style="width: 25%; margin-top: 8px;"></div>
+                            <div class="job-card-footer" style="margin-top: 12px;">
+                                <div class="skeleton" style="width: 50px; height: 20px;"></div>
+                                <div class="skeleton" style="width: 40px; height: 14px;"></div>
+                            </div>
+                        </div>
+                        <div class="job-card" style="pointer-events: none;">
+                            <div class="job-card-header">
+                                <div class="skeleton skeleton-text" style="width: 75%; height: 18px;"></div>
+                                <div class="skeleton" style="width: 42px; height: 24px; border-radius: 9999px;"></div>
+                            </div>
+                            <div class="skeleton skeleton-text" style="width: 55%;"></div>
+                            <div class="skeleton skeleton-text" style="width: 30%;"></div>
+                            <div class="job-card-footer" style="margin-top: 12px;">
+                                <div class="skeleton" style="width: 55px; height: 20px;"></div>
+                                <div class="skeleton" style="width: 45px; height: 14px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- ==================== CENTER PANEL - JOB DETAIL ==================== -->
+            <section class="panel job-detail-panel" id="job-detail-panel">
+                <!-- Mobile Back Button (hidden on desktop) -->
+                <button class="btn btn-ghost mobile-back" onclick="goBack()" style="display: none; position: absolute; top: 16px; left: 16px; z-index: 10;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m15 18-6-6 6-6"/>
+                    </svg>
+                    Back
+                </button>
+
+                <!-- Job Detail Content -->
+                <div id="job-detail" class="panel-body no-padding">
+                    <!-- Empty State (default) -->
+                    <div class="job-detail-empty">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3;">
+                            <rect width="20" height="14" x="2" y="7" rx="2" ry="2"/>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                        </svg>
+                        <h3>Select a Job</h3>
+                        <p>Choose a job from the list to view details and start your application</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== RIGHT SIDEBAR - APPLICATION PANEL ==================== -->
+            <aside class="panel application-panel" id="application-panel-container">
+                <!-- Mobile Close Button (hidden on desktop) -->
+                <button class="btn btn-icon btn-ghost mobile-close" onclick="goBack()" style="display: none; position: absolute; top: 16px; right: 16px; z-index: 10;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18"/>
+                        <path d="m6 6 12 12"/>
+                    </svg>
+                </button>
+
+                <!-- Application Panel Content -->
+                <div id="application-panel">
+                    <!-- Empty State (default) -->
+                    <div class="application-empty">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3;">
+                            <path d="m22 2-7 20-4-9-9-4Z"/>
+                            <path d="M22 2 11 13"/>
+                        </svg>
+                        <h3>Ready to Apply?</h3>
+                        <p>Select a job and click "Start Application" to begin your outreach</p>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- ==================== MODALS ==================== -->
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Settings</h2>
+                <button class="modal-close" onclick="closeModal('settings-modal')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18"/>
+                        <path d="m6 6 12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Theme Setting -->
+                <div class="form-group">
+                    <label class="form-label">Appearance</label>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-secondary" style="flex: 1;" onclick="setTheme('dark')" id="theme-dark-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+                            </svg>
+                            Dark
+                        </button>
+                        <button class="btn btn-secondary" style="flex: 1;" onclick="setTheme('light')" id="theme-light-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="4"/>
+                                <path d="M12 2v2"/>
+                                <path d="M12 20v2"/>
+                                <path d="m4.93 4.93 1.41 1.41"/>
+                                <path d="m17.66 17.66 1.41 1.41"/>
+                                <path d="M2 12h2"/>
+                                <path d="M20 12h2"/>
+                                <path d="m6.34 17.66-1.41 1.41"/>
+                                <path d="m19.07 4.93-1.41 1.41"/>
+                            </svg>
+                            Light
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search Configuration -->
+                <div class="form-group" style="margin-top: 24px;">
+                    <label class="form-label">Job Search Preferences</label>
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 12px;">
+                        Configure your job search criteria. AI will search for jobs matching these.
+                    </p>
+
+                    <div style="background: var(--bg-tertiary); border-radius: var(--radius-md); padding: 16px;">
+                        <!-- Target Titles with AI Generate -->
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label class="form-label" style="font-size: 0.6875rem; margin: 0;">Target Job Titles</label>
+                                <button class="btn btn-sm" style="font-size: 0.6875rem; padding: 4px 8px;" onclick="generateTitles()" id="generate-titles-btn">
+                                    ✨ Generate from Resume
+                                </button>
+                            </div>
+                            <div id="titles-container" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 36px; padding: 8px; background: var(--bg-secondary); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                                <span style="color: var(--text-tertiary); font-size: 0.75rem;">Click "Generate" or add titles below</span>
+                            </div>
+                            <input type="text" class="form-input" placeholder="Add a title and press Enter" id="add-title-input" style="margin-top: 8px;" onkeypress="if(event.key==='Enter'){addTitle(this.value);this.value='';event.preventDefault();}">
+                        </div>
+
+                        <!-- Remote Preference -->
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <label class="form-label" style="font-size: 0.6875rem;">Work Arrangement</label>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-sm work-pref-btn active" data-pref="remote" onclick="setWorkPref('remote')">🏠 Remote</button>
+                                <button class="btn btn-sm work-pref-btn" data-pref="hybrid" onclick="setWorkPref('hybrid')">🏢 Hybrid</button>
+                                <button class="btn btn-sm work-pref-btn" data-pref="onsite" onclick="setWorkPref('onsite')">🏛️ On-site</button>
+                                <button class="btn btn-sm work-pref-btn" data-pref="any" onclick="setWorkPref('any')">Any</button>
+                            </div>
+                        </div>
+
+                        <!-- Location -->
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <label class="form-label" style="font-size: 0.6875rem;">Preferred Locations</label>
+                            <div id="locations-container" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 36px; padding: 8px; background: var(--bg-secondary); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                                <span style="color: var(--text-tertiary); font-size: 0.75rem;">Add locations below</span>
+                            </div>
+                            <input type="text" class="form-input" placeholder="e.g., San Francisco, CA" id="add-location-input" style="margin-top: 8px;" onkeypress="if(event.key==='Enter'){addLocation(this.value);this.value='';event.preventDefault();}">
+                        </div>
+
+                        <!-- Salary -->
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-size: 0.6875rem;">Minimum Salary (USD)</label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span style="color: var(--text-secondary);">$</span>
+                                <input type="number" class="form-input" placeholder="150000" id="setting-salary" style="flex: 1;">
+                                <span style="color: var(--text-secondary); font-size: 0.75rem;">/year</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <style>
+                    .work-pref-btn { background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary); }
+                    .work-pref-btn.active { background: var(--accent); color: #ffffff; border-color: var(--accent); }
+                    .title-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: var(--accent); color: #ffffff; border-radius: 16px; font-size: 0.75rem; }
+                    .title-chip button { background: none; border: none; color: #ffffff; cursor: pointer; padding: 0; font-size: 1rem; line-height: 1; opacity: 0.8; }
+                    .title-chip button:hover { opacity: 1; }
+                </style>
+
+                <!-- Integration Settings -->
+                <div class="form-group" style="margin-top: 24px;">
+                    <label class="form-label">Integrations</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect width="20" height="16" x="2" y="4" rx="2"/>
+                                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                                </svg>
+                                <span style="font-size: 0.875rem; font-weight: 500;">Email</span>
+                            </div>
+                            <button class="btn btn-sm btn-secondary">Connect</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('settings-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interview Scheduler Modal -->
+    <div class="modal-overlay" id="scheduler-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Schedule Interview</h2>
+                <button class="modal-close" onclick="closeModal('scheduler-modal')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18"/>
+                        <path d="m6 6 12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Interview Type</label>
+                    <select class="form-select" id="interview-type">
+                        <option value="phone">Phone Screen</option>
+                        <option value="video">Video Call</option>
+                        <option value="onsite">On-site Interview</option>
+                        <option value="technical">Technical Assessment</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" class="form-input" id="interview-date">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Time</label>
+                    <input type="time" class="form-input" id="interview-time">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Duration</label>
+                    <select class="form-select" id="interview-duration">
+                        <option value="30">30 minutes</option>
+                        <option value="45">45 minutes</option>
+                        <option value="60" selected>1 hour</option>
+                        <option value="90">1.5 hours</option>
+                        <option value="120">2 hours</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-textarea" id="interview-notes" placeholder="Add any notes about the interview..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('scheduler-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="scheduleInterview()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
+                        <line x1="16" x2="16" y1="2" y2="6"/>
+                        <line x1="8" x2="8" y1="2" y2="6"/>
+                        <line x1="3" x2="21" y1="10" y2="10"/>
+                    </svg>
+                    Schedule
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cover Letter Full Screen Modal -->
+    <div class="modal-overlay" id="coverletter-modal">
+        <div class="modal modal-fullscreen">
+            <div class="modal-header">
+                <h2 class="modal-title">Edit Cover Letter</h2>
+                <button class="modal-close" onclick="closeModal('coverletter-modal')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18"/>
+                        <path d="m6 6 12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-secondary" onclick="generateCoverLetterInModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                                <path d="M5 3v4"/>
+                                <path d="M19 17v4"/>
+                                <path d="M3 5h4"/>
+                                <path d="M17 19h4"/>
+                            </svg>
+                            Generate with AI
+                        </button>
+                    </div>
+                    <span id="coverletter-char-count" style="font-size: 0.75rem; color: var(--text-tertiary);">0 characters</span>
+                </div>
+                <textarea class="form-textarea" id="coverletter-fullscreen-textarea"
+                          style="flex: 1; min-height: 400px; resize: none; font-size: 0.9375rem; line-height: 1.7;"
+                          placeholder="Write your cover letter here..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('coverletter-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveCoverLetterFromModal()">Save Cover Letter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resume Modal -->
+    <div class="modal-overlay" id="resume-modal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Manage Resume</h2>
+                <button class="modal-close" onclick="closeModal('resume-modal')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18"/>
+                        <path d="m6 6 12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Current Resume Status -->
+                <div id="resume-status" style="margin-bottom: 24px;">
+                    <div id="no-resume" style="text-align: center; padding: 32px; background: var(--bg-tertiary); border-radius: var(--radius-md); border: 2px dashed var(--border-color);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-tertiary); margin-bottom: 12px;">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <p style="color: var(--text-secondary); margin-bottom: 8px;">No resume uploaded yet</p>
+                        <p style="color: var(--text-tertiary); font-size: 0.875rem;">Upload your resume to enable job matching and fit scores</p>
+                    </div>
+                    <div id="resume-info" style="display: none; padding: 16px; background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <path d="m9 15 2 2 4-4"/>
+                            </svg>
+                            <div style="flex: 1;">
+                                <p id="resume-name" style="font-weight: 600; color: var(--text-primary);"></p>
+                                <p id="resume-meta" style="font-size: 0.75rem; color: var(--text-tertiary);"></p>
+                            </div>
+                            <span style="padding: 4px 8px; background: var(--success-bg); color: var(--success); border-radius: var(--radius-full); font-size: 0.6875rem; font-weight: 600; text-transform: uppercase;">Active</span>
+                        </div>
+                        <p id="resume-description-text" style="display: none; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 12px;"></p>
+                        <div id="resume-experience-section" style="display: none; margin-bottom: 12px;">
+                            <p style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Experience Summary</p>
+                            <p id="resume-experience-summary" style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.5;"></p>
+                        </div>
+                        <div id="resume-titles-section" style="display: none; margin-bottom: 12px;">
+                            <p style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Target Roles</p>
+                            <div id="resume-target-titles" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                        </div>
+                        <div id="resume-skills" style="margin-top: 12px;">
+                            <p style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Detected Skills</p>
+                            <div id="skills-list" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                        </div>
+                        <!-- View PDF Button -->
+                        <div id="resume-pdf-section" style="margin-top: 16px; display: none;">
+                            <button id="view-pdf-btn" onclick="viewResumePdf()" style="width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: var(--radius-md); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.875rem; font-weight: 600;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <path d="M12 18v-6"/>
+                                    <path d="m9 15 3-3 3 3"/>
+                                </svg>
+                                View Full Resume (PDF)
+                            </button>
+                        </div>
+                        <div id="resume-no-pdf" style="margin-top: 16px; display: none; padding: 12px; background: var(--warning-bg); border-radius: var(--radius-md); font-size: 0.8125rem; color: var(--warning);">
+                            <strong>No PDF available.</strong> This resume was created manually. Upload a PDF to enable viewing.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Form -->
+                <div style="border-top: 1px solid var(--border-color); padding-top: 24px;">
+                    <h3 style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-bottom: 16px;">Upload New Resume</h3>
+                    <form id="resume-upload-form" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label class="form-label">Profile Name</label>
+                            <input type="text" class="form-input" id="resume-profile-name" placeholder="e.g., Software Engineer, Full Stack" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Description (optional)</label>
+                            <input type="text" class="form-input" id="resume-description" placeholder="Brief description of this resume version">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Resume PDF</label>
+                            <div id="resume-dropzone" style="border: 2px dashed var(--border-color); border-radius: var(--radius-md); padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s ease;">
+                                <input type="file" id="resume-file" accept=".pdf" style="display: none;" required>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-tertiary); margin-bottom: 8px;">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" x2="12" y1="3" y2="15"/>
+                                </svg>
+                                <p id="dropzone-text" style="color: var(--text-secondary); margin-bottom: 4px;">Click to upload or drag and drop</p>
+                                <p style="color: var(--text-tertiary); font-size: 0.75rem;">PDF files only, max 10MB</p>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                            <input type="checkbox" id="resume-default" style="width: 16px; height: 16px;">
+                            <label for="resume-default" style="font-size: 0.875rem; color: var(--text-secondary);">Set as default resume</label>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('resume-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="uploadResume()" id="upload-resume-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" x2="12" y1="3" y2="15"/>
+                    </svg>
+                    Upload Resume
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal-overlay" id="confirm-modal">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="confirm-title">Confirm Action</h2>
+                <button class="modal-close" onclick="closeModal('confirm-modal')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18"/>
+                        <path d="m6 6 12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message" style="font-size: 0.9375rem; color: var(--text-secondary);">Are you sure you want to proceed?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('confirm-modal')">Cancel</button>
+                <button class="btn btn-danger" id="confirm-action-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/components.js?v=4"></script>
+    <script src="js/app.js?v=4"></script>
+
+    <!-- Additional inline scripts for modal functions -->
+    <script>
+        // Theme setting from modal
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            if (window.state) {
+                window.state.settings.theme = theme;
+            }
+
+            // Update button states
+            document.getElementById('theme-dark-btn').classList.toggle('btn-primary', theme === 'dark');
+            document.getElementById('theme-dark-btn').classList.toggle('btn-secondary', theme !== 'dark');
+            document.getElementById('theme-light-btn').classList.toggle('btn-primary', theme === 'light');
+            document.getElementById('theme-light-btn').classList.toggle('btn-secondary', theme !== 'light');
+        }
+
+        // Job search preferences state
+        let jobSearchPrefs = {
+            profileId: null,
+            titles: [],
+            workPrefs: ['remote'],  // Array for multi-select
+            locations: [],  // Array of location strings (e.g., ["San Francisco, CA", "Remote"])
+            salary: null
+        };
+
+        // Generate titles from resume using AI
+        async function generateTitles() {
+            const btn = document.getElementById('generate-titles-btn');
+            const container = document.getElementById('titles-container');
+
+            if (!jobSearchPrefs.profileId) {
+                showToast('error', 'No Resume', 'Please upload a resume first');
+                return;
+            }
+
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner spinner-sm"></span> Generating...';
+
+            try {
+                const apiBase = window.API_BASE || '/api';
+
+                const response = await fetch(`${apiBase}/resume/${jobSearchPrefs.profileId}/generate-titles`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to generate titles');
+                }
+
+                const data = await response.json();
+                const titles = data.titles || [];
+
+                if (titles.length === 0) {
+                    showToast('warning', 'No Titles Found', 'Could not extract titles from resume');
+                    return;
+                }
+
+                // Add all generated titles
+                titles.forEach(title => {
+                    if (!jobSearchPrefs.titles.includes(title)) {
+                        jobSearchPrefs.titles.push(title);
+                    }
+                });
+
+                renderTitleChips();
+                showToast('success', 'Titles Generated', `Added ${titles.length} job titles from resume`);
+
+            } catch (error) {
+                console.error('Generate titles error:', error);
+                showToast('error', 'Generation Failed', error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '✨ Generate from Resume';
+            }
+        }
+
+        // Add a single title
+        function addTitle(title) {
+            title = title.trim();
+            if (!title) return;
+            if (jobSearchPrefs.titles.includes(title)) {
+                showToast('info', 'Already Added', `"${title}" is already in your list`);
+                return;
+            }
+            jobSearchPrefs.titles.push(title);
+            renderTitleChips();
+        }
+
+        // Remove a title
+        function removeTitle(title) {
+            jobSearchPrefs.titles = jobSearchPrefs.titles.filter(t => t !== title);
+            renderTitleChips();
+        }
+
+        // Add a location
+        function addLocation(loc) {
+            loc = loc.trim();
+            if (!loc) return;
+            if (jobSearchPrefs.locations.includes(loc)) {
+                showToast('info', 'Already Added', `"${loc}" is already in your list`);
+                return;
+            }
+            jobSearchPrefs.locations.push(loc);
+            renderLocationChips();
+        }
+
+        // Remove a location
+        function removeLocation(loc) {
+            jobSearchPrefs.locations = jobSearchPrefs.locations.filter(l => l !== loc);
+            renderLocationChips();
+        }
+
+        // Render location chips
+        function renderLocationChips() {
+            const container = document.getElementById('locations-container');
+            if (!container) return;
+
+            if (jobSearchPrefs.locations.length === 0) {
+                container.innerHTML = '<span style="color: var(--text-tertiary); font-size: 0.75rem;">Add locations below</span>';
+                return;
+            }
+
+            container.innerHTML = jobSearchPrefs.locations.map(loc => `
+                <span class="title-chip">
+                    ${loc}
+                    <button onclick="removeLocation('${loc.replace(/'/g, "\\'")}')">×</button>
+                </span>
+            `).join('');
+        }
+
+        // Render title chips
+        function renderTitleChips() {
+            const container = document.getElementById('titles-container');
+            if (!container) return;
+
+            if (jobSearchPrefs.titles.length === 0) {
+                container.innerHTML = '<span style="color: var(--text-tertiary); font-size: 0.75rem;">Click "Generate" or add titles below</span>';
+                return;
+            }
+
+            container.innerHTML = jobSearchPrefs.titles.map(title => `
+                <span class="title-chip">
+                    ${title}
+                    <button onclick="removeTitle('${title.replace(/'/g, "\\'")}')">×</button>
+                </span>
+            `).join('');
+        }
+
+        // Toggle work preference (multi-select)
+        function setWorkPref(pref) {
+            // Special case: "any" clears other selections and selects only "any"
+            if (pref === 'any') {
+                jobSearchPrefs.workPrefs = ['any'];
+            } else {
+                // Remove "any" if it was selected and user picks something else
+                jobSearchPrefs.workPrefs = jobSearchPrefs.workPrefs.filter(p => p !== 'any');
+
+                // Toggle the preference
+                const index = jobSearchPrefs.workPrefs.indexOf(pref);
+                if (index > -1) {
+                    // Remove if already selected (but keep at least one)
+                    if (jobSearchPrefs.workPrefs.length > 1) {
+                        jobSearchPrefs.workPrefs.splice(index, 1);
+                    }
+                } else {
+                    // Add if not selected
+                    jobSearchPrefs.workPrefs.push(pref);
+                }
+            }
+
+            // Update button states
+            document.querySelectorAll('.work-pref-btn').forEach(btn => {
+                btn.classList.toggle('active', jobSearchPrefs.workPrefs.includes(btn.dataset.pref));
+            });
+        }
+
+        // Save settings to API
+        async function saveSettings() {
+            const salaryInput = document.getElementById('setting-salary');
+            jobSearchPrefs.salary = salaryInput?.value ? parseInt(salaryInput.value) : null;
+
+            // Save locally for theme etc
+            localStorage.setItem('jobhunt-settings', JSON.stringify({
+                salary: jobSearchPrefs.salary,
+            }));
+
+            // If we have a profile ID, save to API
+            if (jobSearchPrefs.profileId) {
+                try {
+                    const apiBase = window.API_BASE || '/api';
+
+                    const response = await fetch(`${apiBase}/resume/${jobSearchPrefs.profileId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            target_titles: jobSearchPrefs.titles,
+                            preferred_remote: jobSearchPrefs.workPrefs.join(','),  // Join array for API
+                            preferred_locations: jobSearchPrefs.locations,
+                            salary_expectation_min: jobSearchPrefs.salary,
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Failed to save preferences');
+                    }
+
+                    closeModal('settings-modal');
+                    showToast('success', 'Settings Saved', 'Your job search preferences have been updated');
+
+                } catch (error) {
+                    console.error('Save settings error:', error);
+                    showToast('error', 'Save Failed', error.message);
+                }
+            } else {
+                closeModal('settings-modal');
+                showToast('success', 'Settings Saved', 'Preferences saved locally (upload resume to sync)');
+            }
+        }
+
+        // Load settings from API
+        async function loadSettings() {
+            // Load theme
+            const theme = localStorage.getItem('theme') || 'dark';
+            setTheme(theme);
+
+            // Load local settings
+            const saved = localStorage.getItem('jobhunt-settings');
+            if (saved) {
+                try {
+                    const settings = JSON.parse(saved);
+                    jobSearchPrefs.salary = settings.salary || null;
+                } catch (e) {}
+            }
+
+            // Try to load from API (get default resume profile)
+            try {
+                const apiBase = window.API_BASE || '/api';
+
+                const response = await fetch(`${apiBase}/resume/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const profiles = data.profiles || [];
+                    const profile = profiles.find(p => p.is_default) || profiles[0];
+
+                    if (profile) {
+                        jobSearchPrefs.profileId = profile.id;
+                        jobSearchPrefs.titles = profile.target_titles || [];
+                        // Parse preferred_remote as comma-separated string into array
+                        const remotePref = profile.preferred_remote || 'remote';
+                        jobSearchPrefs.workPrefs = remotePref.split(',').map(p => p.trim()).filter(p => p);
+                        if (jobSearchPrefs.workPrefs.length === 0) {
+                            jobSearchPrefs.workPrefs = ['remote'];  // Default fallback
+                        }
+                        // Load preferred_locations from API (already an array)
+                        jobSearchPrefs.locations = profile.preferred_locations || [];
+                        if (profile.salary_expectation_min) {
+                            jobSearchPrefs.salary = profile.salary_expectation_min;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to load resume profile:', e);
+            }
+
+            // Update UI
+            renderTitleChips();
+            renderLocationChips();
+            // Update work pref button states from the array
+            document.querySelectorAll('.work-pref-btn').forEach(btn => {
+                btn.classList.toggle('active', jobSearchPrefs.workPrefs.includes(btn.dataset.pref));
+            });
+
+            const salaryInput = document.getElementById('setting-salary');
+            if (salaryInput) salaryInput.value = jobSearchPrefs.salary || '';
+        }
+
+        // Override openSettings to load settings
+        const originalOpenSettings = window.openSettings;
+        window.openSettings = async function() {
+            openModal('settings-modal');
+            await loadSettings();
+        };
+
+        // Expose job search preference functions globally
+        window.generateTitles = generateTitles;
+        window.addTitle = addTitle;
+        window.removeTitle = removeTitle;
+        window.addLocation = addLocation;
+        window.removeLocation = removeLocation;
+        window.setWorkPref = setWorkPref;
+
+        // Schedule interview
+        function scheduleInterview() {
+            const type = document.getElementById('interview-type')?.value;
+            const date = document.getElementById('interview-date')?.value;
+            const time = document.getElementById('interview-time')?.value;
+            const duration = document.getElementById('interview-duration')?.value;
+            const notes = document.getElementById('interview-notes')?.value;
+
+            if (!date || !time) {
+                showToast('error', 'Missing Information', 'Please select a date and time');
+                return;
+            }
+
+            // In a real app, this would call the API
+            closeModal('scheduler-modal');
+            showToast('success', 'Interview Scheduled', `${type} scheduled for ${date} at ${time}`);
+        }
+
+        // Open scheduler modal
+        function openSchedulerModal() {
+            openModal('scheduler-modal');
+        }
+
+        // Cover letter modal functions
+        function openCoverLetterModal() {
+            const textarea = document.getElementById('coverletter-fullscreen-textarea');
+            if (textarea && window.state) {
+                textarea.value = window.state.applicationDraft?.coverLetter || '';
+                updateCoverLetterCharCount();
+            }
+            openModal('coverletter-modal');
+        }
+
+        function updateCoverLetterCharCount() {
+            const textarea = document.getElementById('coverletter-fullscreen-textarea');
+            const countEl = document.getElementById('coverletter-char-count');
+            if (textarea && countEl) {
+                countEl.textContent = `${textarea.value.length} characters`;
+            }
+        }
+
+        function generateCoverLetterInModal() {
+            if (window.generateCoverLetter) {
+                window.generateCoverLetter().then(() => {
+                    const textarea = document.getElementById('coverletter-fullscreen-textarea');
+                    if (textarea && window.state) {
+                        textarea.value = window.state.applicationDraft?.coverLetter || '';
+                        updateCoverLetterCharCount();
+                    }
+                });
+            }
+        }
+
+        function saveCoverLetterFromModal() {
+            const textarea = document.getElementById('coverletter-fullscreen-textarea');
+            if (textarea && window.state) {
+                window.state.applicationDraft.coverLetter = textarea.value;
+                window.state.applicationDraft.lastSaved = new Date();
+
+                // Update the main textarea if visible
+                const mainTextarea = document.getElementById('cover-letter-textarea');
+                if (mainTextarea) {
+                    mainTextarea.value = textarea.value;
+                }
+
+                if (window.renderApplicationPanel) {
+                    window.renderApplicationPanel();
+                }
+            }
+            closeModal('coverletter-modal');
+            showToast('success', 'Saved', 'Cover letter has been saved');
+        }
+
+        // Add input listener for character count
+        document.getElementById('coverletter-fullscreen-textarea')?.addEventListener('input', updateCoverLetterCharCount);
+
+        // Confirmation modal
+        function showConfirmModal(title, message, onConfirm) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+
+            const confirmBtn = document.getElementById('confirm-action-btn');
+            confirmBtn.onclick = function() {
+                closeModal('confirm-modal');
+                if (onConfirm) onConfirm();
+            };
+
+            openModal('confirm-modal');
+        }
+
+        // Hide initial loader after app initializes
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const loader = document.getElementById('initial-loader');
+                if (loader) {
+                    loader.classList.add('hidden');
+                    setTimeout(function() {
+                        loader.remove();
+                    }, 300);
+                }
+            }, 500);
+        });
+
+        // Mobile responsive handling
+        function handleMobileView() {
+            const isMobile = window.innerWidth <= 768;
+            const backBtns = document.querySelectorAll('.mobile-back, .mobile-close');
+
+            backBtns.forEach(btn => {
+                btn.style.display = isMobile ? 'flex' : 'none';
+            });
+        }
+
+        window.addEventListener('resize', handleMobileView);
+        handleMobileView();
+
+        // Expose modal functions globally
+        window.openCoverLetterModal = openCoverLetterModal;
+        window.saveCoverLetterFromModal = saveCoverLetterFromModal;
+        window.openSchedulerModal = openSchedulerModal;
+        window.showConfirmModal = showConfirmModal;
+
+        // Resume upload functionality
+        let selectedResumeFile = null;
+
+        // Setup drag and drop for resume upload
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropzone = document.getElementById('resume-dropzone');
+            const fileInput = document.getElementById('resume-file');
+            const dropzoneText = document.getElementById('dropzone-text');
+
+            if (dropzone && fileInput) {
+                // Click to select file
+                dropzone.addEventListener('click', () => fileInput.click());
+
+                // File selected via input
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files && e.target.files[0]) {
+                        handleResumeFile(e.target.files[0]);
+                    }
+                });
+
+                // Drag and drop
+                dropzone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropzone.style.borderColor = 'var(--accent)';
+                    dropzone.style.background = 'var(--accent-glow)';
+                });
+
+                dropzone.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    dropzone.style.borderColor = 'var(--border-color)';
+                    dropzone.style.background = 'transparent';
+                });
+
+                dropzone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropzone.style.borderColor = 'var(--border-color)';
+                    dropzone.style.background = 'transparent';
+
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        handleResumeFile(e.dataTransfer.files[0]);
+                    }
+                });
+            }
+
+            // Load existing resume on modal open
+            const resumeModal = document.getElementById('resume-modal');
+            if (resumeModal) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.target.classList.contains('open')) {
+                            loadCurrentResume();
+                        }
+                    });
+                });
+                observer.observe(resumeModal, { attributes: true, attributeFilter: ['class'] });
+            }
+        });
+
+        function handleResumeFile(file) {
+            const dropzoneText = document.getElementById('dropzone-text');
+
+            // Validate file type
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showToast('error', 'Invalid File', 'Please upload a PDF file');
+                return;
+            }
+
+            // Validate file size (10MB max)
+            if (file.size > 10 * 1024 * 1024) {
+                showToast('error', 'File Too Large', 'Maximum file size is 10MB');
+                return;
+            }
+
+            selectedResumeFile = file;
+            if (dropzoneText) {
+                dropzoneText.innerHTML = `<strong style="color: var(--success);">${file.name}</strong> (${(file.size / 1024).toFixed(1)} KB)`;
+            }
+        }
+
+        async function loadCurrentResume() {
+            try {
+                // Get API_BASE from global scope or compute it
+                const apiBase = window.API_BASE || '/api';
+                const response = await fetch(`${apiBase}/resume/`);
+                if (!response.ok) return;
+
+                const data = await response.json();
+                const profiles = data.profiles || [];
+
+                const noResume = document.getElementById('no-resume');
+                const resumeInfo = document.getElementById('resume-info');
+
+                if (profiles.length > 0) {
+                    const profile = profiles.find(p => p.is_default) || profiles[0];
+
+                    if (noResume) noResume.style.display = 'none';
+                    if (resumeInfo) {
+                        resumeInfo.style.display = 'block';
+                        document.getElementById('resume-name').textContent = profile.name;
+
+                        // Build meta info with more details
+                        const metaParts = [];
+                        if (profile.experience_years) {
+                            metaParts.push(`${profile.experience_years} years experience`);
+                        }
+                        if (profile.times_used > 0) {
+                            metaParts.push(`Used ${profile.times_used} time${profile.times_used > 1 ? 's' : ''}`);
+                        }
+                        metaParts.push(`Updated ${new Date(profile.updated_at).toLocaleDateString()}`);
+                        document.getElementById('resume-meta').textContent = metaParts.join(' · ');
+
+                        // Show description if available
+                        const descEl = document.getElementById('resume-description-text');
+                        if (descEl && profile.description) {
+                            descEl.textContent = profile.description;
+                            descEl.style.display = 'block';
+                        } else if (descEl) {
+                            descEl.style.display = 'none';
+                        }
+
+                        // Show experience summary if available
+                        const summaryEl = document.getElementById('resume-experience-summary');
+                        if (summaryEl && profile.experience_summary) {
+                            summaryEl.textContent = profile.experience_summary;
+                            summaryEl.parentElement.style.display = 'block';
+                        } else if (summaryEl) {
+                            summaryEl.parentElement.style.display = 'none';
+                        }
+
+                        // Show target titles if available
+                        const titlesEl = document.getElementById('resume-target-titles');
+                        if (titlesEl && profile.target_titles && profile.target_titles.length > 0) {
+                            titlesEl.innerHTML = profile.target_titles.map(title =>
+                                `<span style="display: inline-block; padding: 4px 10px; background: var(--accent-bg); color: var(--accent); border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 500;">${title}</span>`
+                            ).join('');
+                            titlesEl.parentElement.style.display = 'block';
+                        } else if (titlesEl) {
+                            titlesEl.parentElement.style.display = 'none';
+                        }
+
+                        // Show skills
+                        const skillsList = document.getElementById('skills-list');
+                        if (skillsList && profile.skills && profile.skills.length > 0) {
+                            skillsList.innerHTML = profile.skills.slice(0, 15).map(skill =>
+                                `<span style="display: inline-block; padding: 4px 10px; background: var(--success-bg); color: var(--success); border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 500;">${skill}</span>`
+                            ).join('');
+                            if (profile.skills.length > 15) {
+                                skillsList.innerHTML += `<span style="display: inline-block; padding: 4px 10px; background: var(--bg-secondary); color: var(--text-tertiary); border-radius: var(--radius-full); font-size: 0.75rem;">+${profile.skills.length - 15} more</span>`;
+                            }
+                        } else if (skillsList) {
+                            skillsList.innerHTML = '<span style="color: var(--text-tertiary); font-size: 0.875rem;">No skills detected</span>';
+                        }
+
+                        // Check if PDF is available and show View PDF button
+                        const pdfSection = document.getElementById('resume-pdf-section');
+                        const noPdfSection = document.getElementById('resume-no-pdf');
+
+                        // Store profile ID for the PDF viewer
+                        window.currentResumeProfileId = profile.id;
+
+                        // Check if resume has raw_text (meaning it was uploaded as PDF)
+                        try {
+                            const textResponse = await fetch(`${apiBase}/resume/${profile.id}/text`);
+                            if (textResponse.ok) {
+                                const textData = await textResponse.json();
+                                if (textData.raw_text) {
+                                    // PDF was uploaded - show View PDF button
+                                    if (pdfSection) pdfSection.style.display = 'block';
+                                    if (noPdfSection) noPdfSection.style.display = 'none';
+                                } else {
+                                    // No PDF - show warning
+                                    if (pdfSection) pdfSection.style.display = 'none';
+                                    if (noPdfSection) noPdfSection.style.display = 'block';
+                                }
+                            }
+                        } catch (e) {
+                            console.log('Could not check resume PDF:', e);
+                            if (pdfSection) pdfSection.style.display = 'none';
+                            if (noPdfSection) noPdfSection.style.display = 'block';
+                        }
+                    }
+                } else {
+                    if (noResume) noResume.style.display = 'block';
+                    if (resumeInfo) resumeInfo.style.display = 'none';
+                }
+            } catch (error) {
+                console.warn('Failed to load resume:', error);
+            }
+        }
+
+        async function uploadResume() {
+            const nameInput = document.getElementById('resume-profile-name');
+            const descInput = document.getElementById('resume-description');
+            const defaultCheck = document.getElementById('resume-default');
+            const uploadBtn = document.getElementById('upload-resume-btn');
+
+            const name = nameInput?.value?.trim();
+            if (!name) {
+                showToast('error', 'Missing Name', 'Please enter a profile name');
+                nameInput?.focus();
+                return;
+            }
+
+            if (!selectedResumeFile) {
+                showToast('error', 'No File', 'Please select a PDF file to upload');
+                return;
+            }
+
+            // Disable button and show loading
+            if (uploadBtn) {
+                uploadBtn.disabled = true;
+                uploadBtn.innerHTML = '<span class="spinner spinner-sm"></span> Uploading...';
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedResumeFile);
+                formData.append('name', name);
+                formData.append('description', descInput?.value || '');
+                formData.append('is_default', defaultCheck?.checked ? 'true' : 'false');
+
+                // Get API_BASE from global scope or compute it
+                const apiBase = window.API_BASE || '/api';
+                const response = await fetch(`${apiBase}/resume/upload`, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Upload failed');
+                }
+
+                const result = await response.json();
+
+                // Success!
+                showToast('success', 'Resume Uploaded', `Successfully uploaded "${result.name}" with ${result.skills?.length || 0} skills detected`);
+
+                // Reset form
+                nameInput.value = '';
+                if (descInput) descInput.value = '';
+                if (defaultCheck) defaultCheck.checked = false;
+                selectedResumeFile = null;
+                document.getElementById('dropzone-text').innerHTML = 'Click to upload or drag and drop';
+
+                // Reload resume info
+                loadCurrentResume();
+
+            } catch (error) {
+                showToast('error', 'Upload Failed', error.message);
+            } finally {
+                if (uploadBtn) {
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" x2="12" y1="3" y2="15"/>
+                        </svg>
+                        Upload Resume
+                    `;
+                }
+            }
+        }
+
+        // Open resume modal with data loading
+        function openResumeModal() {
+            loadCurrentResume();
+            openModal('resume-modal');
+        }
+
+        // View resume PDF in new tab
+        function viewResumePdf() {
+            const profileId = window.currentResumeProfileId;
+            if (!profileId) {
+                showToast('error', 'Error', 'No resume profile loaded');
+                return;
+            }
+            const apiBase = window.API_BASE || '/api';
+            window.open(`${apiBase}/resume/${profileId}/pdf`, '_blank');
+        }
+
+        // Expose functions globally
+        window.uploadResume = uploadResume;
+        window.openResumeModal = openResumeModal;
+        window.loadCurrentResume = loadCurrentResume;
+        window.viewResumePdf = viewResumePdf;
+    </script>
+
+    <!-- Responsive styles for mobile -->
+    <style>
+        @media (max-width: 1024px) {
+            .btn-text {
+                display: none;
+            }
+
+            .stats-bar {
+                display: none;
+            }
+
+            .main-content {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .application-panel {
+                display: none;
+            }
+
+            .application-panel.mobile-visible {
+                display: flex;
+                position: fixed;
+                top: 0;
+                right: 0;
+                bottom: 0;
+                width: 380px;
+                max-width: 100%;
+                z-index: 500;
+                box-shadow: var(--shadow-xl);
+                background: var(--bg-primary);
+                animation: slideInRight 0.3s ease-out;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .job-list-panel {
+                display: flex;
+            }
+
+            .job-detail-panel {
+                display: none;
+            }
+
+            .job-detail-panel.mobile-visible {
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 400;
+                background: var(--bg-primary);
+                animation: slideInRight 0.3s ease-out;
+            }
+
+            .app-header {
+                padding: 12px 16px;
+            }
+
+            .app-logo span {
+                display: none;
+            }
+
+            .header-actions {
+                gap: 4px;
+            }
+
+            .btn-primary {
+                padding: 10px 12px;
+            }
+
+            .search-filter-bar {
+                padding: 12px;
+            }
+
+            .filter-tabs {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .filter-tab {
+                flex: 0 0 auto;
+                padding: 6px 10px;
+            }
+
+            .panel-body {
+                padding: 12px;
+            }
+
+            .job-card {
+                padding: 12px;
+            }
+
+            .modal {
+                max-height: 100vh;
+                border-radius: 0;
+            }
+
+            .modal.modal-fullscreen {
+                width: 100vw;
+                height: 100vh;
+                max-width: 100vw;
+                max-height: 100vh;
+            }
+        }
+
+        /* Hide scrollbar but keep scrolling */
+        .filter-tabs {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .filter-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Mobile back button styling */
+        .mobile-back,
+        .mobile-close {
+            position: absolute !important;
+            z-index: 10;
+        }
+
+        .mobile-back {
+            top: 16px !important;
+            left: 16px !important;
+        }
+
+        .mobile-close {
+            top: 16px !important;
+            right: 16px !important;
+        }
+
+        /* Smooth panel transitions */
+        .job-detail-panel,
+        .application-panel {
+            transition: transform 0.3s ease-out;
+        }
+
+        /* Discovery button loading state */
+        #discovery-btn.loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        #discovery-btn.loading svg {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</body>
+</html>
