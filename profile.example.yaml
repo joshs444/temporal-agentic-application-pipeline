@@ -1,0 +1,75 @@
+# =============================================================================
+# Candidate profile  (example / template)
+# =============================================================================
+# The pipeline is candidate-agnostic: all personal details live here, never in
+# code. To use your own details, copy this file and edit it:
+#
+#     cp profile.example.yaml data/profile.yaml      # or ./profile.yaml
+#
+# `data/profile.yaml` and `profile.yaml` are gitignored, so your real details
+# never get committed. You can also point PROFILE_PATH at any file. If no
+# profile file is found, the app falls back to built-in generic defaults.
+#
+# This file is the schema reference. Every value below is a placeholder.
+# =============================================================================
+
+candidate:
+  name: "Alex Rivera"
+  email: "alex.rivera@example.com"
+  phone: "+1 (555) 010-0100"
+  linkedin: "linkedin.com/in/example"
+  location: "Remote (US)"
+  headline: "Senior Software Engineer"
+  current_company: "Acme Corp"
+  years_experience: 6
+
+# Background bullets injected into the LLM system prompts for cover letters and
+# recruiter outreach. Keep these truthful for your own profile.
+background:
+  - "Builds production-grade backend and AI/agentic systems end to end"
+  - "Comfortable across Python, distributed systems, and workflow orchestration"
+  - "Ships measurable impact through automation, reliability, and tooling"
+
+# Concrete achievements the resume-tailoring prompt can draw from.
+achievements:
+  - "Designed and shipped a durable, fault-tolerant automation pipeline in production"
+  - "Integrated several third-party APIs into a single orchestrated workflow"
+  - "Deployed ML/LLM features to production with measurable ROI"
+
+# Resume used as the matching fallback when no default profile exists in the DB.
+# (In normal operation the resume is uploaded through the dashboard and stored
+# in the resume_profiles table; this is the offline/bootstrap fallback.)
+resume:
+  titles:
+    - "Senior Software Engineer"
+    - "Staff Engineer"
+  summary: "Engineer focused on reliable automation and production AI systems."
+  years_of_experience: 6
+  skills:
+    ai_automation:
+      - "LLM integration"
+      - "Agentic workflows"
+      - "Prompt engineering"
+    backend:
+      - "Python"
+      - "FastAPI"
+      - "PostgreSQL"
+      - "Temporal"
+    frontend:
+      - "JavaScript"
+      - "HTML"
+      - "CSS"
+    other:
+      - "Docker"
+      - "AWS"
+      - "CI/CD"
+  experience:
+    - title: "Senior Software Engineer"
+      company: "Acme Corp"
+      highlights:
+        - "Built a durable workflow pipeline orchestrating LLM + external APIs"
+        - "Reduced manual processing time through end-to-end automation"
+  education:
+    - degree: "B.S."
+      field: "Computer Science"
+      institution: "State University"

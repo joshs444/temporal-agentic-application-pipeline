@@ -1,0 +1,70 @@
+# JobHunt Production Docker Compose
+# Uses shared IDP infrastructure (Temporal, Redis) and AWS RDS
+# Deploy with: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  # Job Worker (FastAPI + Temporal worker)
+  job-worker:
+    build:
+      context: ./job-worker
+      dockerfile: Dockerfile
+    container_name: jobhunt-worker
+    environment:
+      # Database (AWS RDS)
+      - DATABASE_URL=${JOBHUNT_DATABASE_URL}
+      # Redis (shared IDP)
+      - REDIS_URL=redis://default:${REDIS_PASSWORD}@redis:6379/0
+      # Temporal (shared IDP)
+      - TEMPORAL_ADDRESS=temporal:7233
+      # API Keys
+      - XAI_API_KEY=${XAI_API_KEY}
+      - SERPAPI_KEY=${SERPAPI_KEY}
+      - SEARCHAPI_KEY=${SEARCHAPI_KEY}
+      - APOLLO_API_KEY=${APOLLO_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - OAUTH_MASTER_KEY=${OAUTH_MASTER_KEY}
+      # SMTP
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      # App settings
+      - JOBHUNT_API_KEY=${JOBHUNT_API_KEY:-prod-api-key}
+      - LOG_LEVEL=info
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "127.0.0.1:8090:8080"
+    networks:
+      - idp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Frontend (nginx serving static files)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jobhunt-frontend
+    ports:
+      - "127.0.0.1:8091:80"
+    networks:
+      - idp-network
+    depends_on:
+      - job-worker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+networks:
+  idp-network:
+    external: true
+    name: idp_default
