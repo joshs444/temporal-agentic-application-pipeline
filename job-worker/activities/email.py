@@ -35,6 +35,7 @@ from utils.email_templates import (
     THANK_YOU_TEMPLATE,
 )
 
+from utils.llm import extract_json
 from utils.llm_config import LLM_API_KEY, LLM_BASE_URL, LLM_LIGHT_MODEL
 from utils.profile import candidate, candidate_name
 
@@ -485,15 +486,11 @@ Return JSON:
 
             content = data["choices"][0]["message"]["content"]
 
-            # Parse JSON from response
-            import json
-            # Handle markdown code blocks
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0]
-
-            result = json.loads(content.strip())
+            # Parse JSON from the response (handles fenced/raw/embedded JSON).
+            # Fall back to rule-based classification if nothing parses.
+            result = extract_json(content)
+            if not result:
+                return _basic_classification(email_body)
 
             # Log LLM usage
             await _log_llm_call(
@@ -855,14 +852,11 @@ Return JSON:
 
             content = data["choices"][0]["message"]["content"]
 
-            # Parse JSON
-            import json
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0]
-
-            result = json.loads(content.strip())
+            # Parse JSON from the response (handles fenced/raw/embedded JSON).
+            # An empty parse routes to the template fallback in the except below.
+            result = extract_json(content)
+            if not result:
+                raise ValueError("Could not parse LLM email JSON")
 
             # Log LLM usage
             await _log_llm_call(

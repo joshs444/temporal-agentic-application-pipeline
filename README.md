@@ -156,6 +156,11 @@ sequenceDiagram
 - **Why config-driven identity?** The candidate's name, contact info, background, and
   resume live in a YAML profile ([`profile.example.yaml`](profile.example.yaml)), never in
   code — so the repo is shareable and prompts/signatures are built at runtime from config.
+- **Scope: single candidate, deliberately.** This runs one candidate's pipeline, so
+  workflow IDs and queries assume a single profile. The orchestration patterns are the
+  point, not multi-tenancy. Going multi-tenant would mean per-user task queues (or
+  Temporal namespaces), tenant-scoped workflow IDs, and row-level scoping on every query —
+  a known, bounded extension rather than a rewrite.
 
 ---
 
@@ -218,6 +223,33 @@ boots and the dashboard/API/Temporal UI are usable without them.
 | Reply detection | `RUN_EMAIL_POLLER`, `ENABLE_TEMPORAL_SIGNALS`, `POLL_INTERVAL_SECONDS` | opt-in Gmail inbox poller; signals the follow-up workflow on reply (the workflow's DB re-check is always-on) |
 | API auth | `JOBHUNT_API_KEY`, `ENVIRONMENT` | required in production; dev is open only when `ENVIRONMENT=development` and no key set |
 
+### See it run: the approval gate, live
+
+No database or API keys needed — this drives the **real** `ApplicationWorkflow` on
+Temporal's in-memory time-skipping server (activities mocked), so you can watch the
+durable human-in-the-loop gate pause, resume on a signal, and expire on its timer in a
+couple of seconds:
+
+```bash
+pip install -r job-worker/requirements.txt
+python scripts/demo_approval_gate.py
+```
+
+```text
+SCENE 1 — a human reviews and approves the draft
+   [1] Started ApplicationWorkflow: drafting outreach for 'Staff Engineer' at Acme.
+   [2] Paused at the approval gate. Live query -> stage='awaiting_approval', approved=False.
+   [3] No process is polling a database — the workflow is durably suspended on Temporal,
+       and would survive a worker restart while it waits.
+   [4] Sent signal approve_send(approved=True). The workflow resumes...
+   [5] Sent + recorded: email_sent=True, message_id='msg-1'; a follow-up workflow was scheduled.
+
+SCENE 2 — nobody approves (the durable 7-day timer fires)
+   [1] Paused at the gate again (stage='awaiting_approval'). This time no one approves.
+   [2] Fast-forwarding virtual time by 7 days (a durable Temporal timer)...
+   [3] The draft expired cleanly: success=False, reason='Approval timeout'. No outreach was sent.
+```
+
 ### Tests
 
 ```bash
@@ -250,6 +282,7 @@ every push/PR.
 │   ├── worker.py                # Registers workflows + activities on the task queue
 │   └── main.py                  # FastAPI entry point
 ├── frontend/                    # Vanilla-JS dashboard (nginx)
+├── scripts/                     # Standalone demos (e.g. the live approval-gate demo)
 ├── db/migrations/               # Numbered SQL migrations
 ├── .github/workflows/ci.yml     # CI: ruff + pytest
 ├── profile.example.yaml         # Candidate profile template (copy to profile.yaml)
@@ -284,6 +317,9 @@ every push/PR.
   stubs pending an external research/search integration.
 - Outbound email defaults to stubbed (`EMAIL_SENDING_ENABLED=false`); flip it on with
   Gmail OAuth configured to send for real.
+- `notify_user` and `log_job_event` are hooks that currently emit structured logs;
+  delivering notifications to a channel and persisting events to the `job_events` table
+  are deferred follow-ups (the integration points are already called by the workflows).
 
 ---
 

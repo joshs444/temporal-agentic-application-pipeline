@@ -275,16 +275,9 @@ Return JSON only:
 
         content = response.choices[0].message.content or "{}"
 
-        # Parse JSON from response
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0]
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0]
-
-        import json
-        try:
-            suggestions = json.loads(content.strip())
-        except json.JSONDecodeError:
+        # Parse JSON from the response (handles fenced/raw/embedded JSON)
+        suggestions = extract_json(content)
+        if not suggestions:
             # Fallback to resume's target_titles if parsing fails
             suggestions = {
                 "job_titles": target_titles or ["Software Engineer"],
@@ -697,16 +690,44 @@ async def update_search_config_last_run(
     jobs_found: int,
     jobs_new: int,
 ) -> None:
-    """Update search config with last run statistics."""
+    """Record a search config's latest run (last_run_at + job counters)."""
     activity.logger.info(f"Updating config {config_id}: found={jobs_found}, new={jobs_new}")
-    # Config is stored in JSON file, not database - log only for now
+
+    import uuid
+    try:
+        cfg_id = uuid.UUID(str(config_id))
+    except (ValueError, TypeError):
+        # Resume-driven / ad-hoc discovery has no saved config row to update.
+        activity.logger.info(f"No saved config to update (config_id={config_id!r})")
+        return
+
+    conn = await get_db_connection()
+    try:
+        await conn.execute(
+            """
+            UPDATE search_configs
+            SET last_run_at = NOW(),
+                last_run_job_count = $2,
+                total_jobs_found = COALESCE(total_jobs_found, 0) + $3
+            WHERE id = $1
+            """,
+            cfg_id,
+            jobs_found,
+            jobs_new,
+        )
+    finally:
+        await conn.close()
 
 
 @activity.defn
 async def log_job_event(job_id: str, event_type: str, event_data: dict) -> None:
-    """Log a job-related event."""
+    """Emit a structured log line for a workflow event.
+
+    Lightweight observability hook. Durable persistence to the job_events table is
+    intentionally deferred: that table enforces a fixed event-type enum that the
+    workflow's event names don't all map onto.
+    """
     activity.logger.info(f"Job event: {event_type} for job {job_id}")
-    # Can be enhanced to store in database event log
 
 
 # =============================================================================
@@ -2224,9 +2245,10 @@ async def update_interview_status(
 
 @activity.defn
 async def notify_user(notification_type: str, data: dict) -> None:
-    """Send notification to user (email, Slack, etc.)."""
-    activity.logger.info(f"Notification: {notification_type}")
+    """Notify the user of a workflow milestone.
 
-    # This would integrate with notification services
-    # For now, just log
-    activity.logger.info(f"Notification data: {data}")
+    Notification hook: currently emits a structured log line. The workflows call it
+    at every user-relevant milestone, so wiring a real channel (email, Slack,
+    websocket push) is a drop-in follow-up — the integration point already exists.
+    """
+    activity.logger.info(f"Notification: {notification_type} | data: {data}")
