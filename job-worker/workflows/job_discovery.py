@@ -241,7 +241,7 @@ class JobDiscoveryWorkflow:
                         all_jobs.extend(search_result.get("jobs", []))
 
                     # Also search remote for each keyword if enabled
-                    if remote_ok and "remote" not in [l.lower() for l in locations]:
+                    if remote_ok and "remote" not in [loc.lower() for loc in locations]:
                         search_result = await workflow.execute_activity(
                             search_jobs_searchapi,
                             args=[keyword, "Remote", results_per_search],
@@ -420,7 +420,7 @@ class JobDiscoveryWorkflow:
             return locations
         if isinstance(locations, str) and locations:
             if "," in locations:
-                return [l.strip() for l in locations.split(",") if l.strip()]
+                return [loc.strip() for loc in locations.split(",") if loc.strip()]
             return [locations]
         return ["Remote"]  # Default to remote if no locations
 

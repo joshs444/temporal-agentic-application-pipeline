@@ -482,7 +482,7 @@ async def approve_application(
             workflow_id=workflow_id,
             message="Application approved and submission in progress",
         )
-    except Exception as e:
+    except Exception:
         # If workflow not running, update directly
         await execute(
             """

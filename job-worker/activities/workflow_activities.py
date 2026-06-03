@@ -825,7 +825,6 @@ async def calculate_detailed_fit_score(
 
     try:
         from utils.llm import get_xai_client, DEFAULT_MODEL
-        import json
         import time
 
         client = get_xai_client()
@@ -1734,7 +1733,6 @@ async def generate_interview_questions(context: dict) -> dict:
 
     try:
         from utils.llm import get_xai_client, DEFAULT_MODEL
-        import json
         import time
 
         client = get_xai_client()
@@ -1937,7 +1935,6 @@ async def generate_talking_points(
 
     try:
         from utils.llm import get_xai_client, DEFAULT_MODEL
-        import json
         import time
 
         client = get_xai_client()
