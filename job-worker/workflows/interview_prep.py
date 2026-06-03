@@ -8,7 +8,6 @@ with suggested talking points.
 
 import logging
 from datetime import timedelta
-from typing import Optional
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
@@ -136,7 +135,6 @@ class InterviewPrepWorkflow:
                 "error": "Application not found",
             }
 
-        application = app_data.get("application", {})
         job = app_data.get("job", {})
         company_id = job.get("company_id")
 

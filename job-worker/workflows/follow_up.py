@@ -352,9 +352,6 @@ class FollowUpWorkflow:
                 workflow.logger.error(f"Follow-up send failed: {e}")
                 continue
 
-            # Brief pause between checks (to handle any incoming signals)
-            await workflow.sleep(timedelta(seconds=1))
-
         # Update application with final follow-up status
         self._completed = True
 

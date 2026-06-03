@@ -6,11 +6,12 @@ Provides REST API for job search automation and tracking.
 """
 
 import asyncio
+import hmac
 import os
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, Depends, Security, Request
+from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
@@ -35,7 +36,8 @@ DATABASE_URL = os.getenv(
     "postgresql://jobhunt:jobhunt_secret@localhost:5433/jobhunt_db"
 )
 REDIS_URL = os.getenv("REDIS_URL", "redis://:redis_secret@localhost:6380/0")
-API_KEY = os.getenv("JOBHUNT_API_KEY", "dev-api-key")  # Set in production!
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+API_KEY = os.getenv("JOBHUNT_API_KEY", "")
 API_KEY_NAME = "X-API-Key"
 
 # API Key security
@@ -46,20 +48,30 @@ async def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> s
     """
     Verify the API key from the request header.
 
-    In development mode (API_KEY="dev-api-key"), authentication is relaxed.
-    In production, a valid API key is required for all endpoints.
+    The dev bypass is gated on ENVIRONMENT (not on the secret's value): only in
+    development AND when no key is configured is auth relaxed. Otherwise a valid
+    key is required, and in production a missing key fails closed (503).
     """
-    # Skip auth for health check
+    # Local development convenience: open only when explicitly in dev with no key.
+    if ENVIRONMENT == "development" and not API_KEY:
+        return "dev"
+
+    # Fail closed if the server is misconfigured (e.g. production without a key).
+    if not API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Server authentication is not configured (set JOBHUNT_API_KEY).",
+        )
+
     if api_key is None:
-        if API_KEY == "dev-api-key":
-            return "dev"
         raise HTTPException(
             status_code=401,
             detail="Missing API key",
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
-    if api_key != API_KEY:
+    # Constant-time comparison to avoid timing leakage.
+    if not hmac.compare_digest(api_key, API_KEY):
         raise HTTPException(
             status_code=403,
             detail="Invalid API key",

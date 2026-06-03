@@ -5,6 +5,7 @@ Full application workflow that generates materials, waits for approval,
 sends the application, and schedules follow-ups.
 """
 
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Optional
@@ -24,7 +25,6 @@ with workflow.unsafe.imports_passed_through():
         update_application_status,
         send_application_email,
         create_application_record,
-        schedule_follow_up,
         log_job_event,
         notify_user,
     )
@@ -320,13 +320,14 @@ class ApplicationWorkflow:
         if not auto_send:
             workflow.logger.info("Waiting for user approval...")
 
-            # Wait for approval signal (with 7-day timeout)
+            # Wait for approval signal (with 7-day timeout). A timeout raises
+            # asyncio.TimeoutError; let other exceptions (e.g. cancellation) propagate.
             try:
                 await workflow.wait_condition(
                     lambda: self._approval_received or self._cancelled,
                     timeout=timedelta(days=7),
                 )
-            except Exception:
+            except asyncio.TimeoutError:
                 workflow.logger.warning("Approval timeout - application expired")
                 await workflow.execute_activity(
                     update_application_status,
@@ -396,14 +397,16 @@ class ApplicationWorkflow:
             }
 
         try:
+            recipient_name = (contact.get("name") if contact else None) or recipient_email
             send_result = await workflow.execute_activity(
                 send_application_email,
                 args=[
                     recipient_email,
+                    recipient_name,
                     self._draft["email"]["subject"],
                     self._draft["email"]["body"],
                     self._draft["email"].get("body_html"),
-                    cover_letter,  # Attachment if present
+                    job_id,
                 ],
                 start_to_close_timeout=timedelta(minutes=2),
                 retry_policy=RetryPolicy(

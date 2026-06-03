@@ -7,7 +7,6 @@ culture research, and detailed fit scoring.
 
 import logging
 from datetime import timedelta
-from typing import Optional
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy

@@ -1055,84 +1055,86 @@ function setupEventListeners() {
  * Load mock data for demo/development
  */
 function loadMockData() {
+    // Demo data shown only when the API is unreachable. Roles are AI-platform /
+    // backend flavored to match the default candidate profile.
     state.jobs = [
         {
             id: 'job-1',
-            title: 'Senior Software Engineer',
-            company_name: 'TechCorp',
-            location: 'San Francisco, CA',
-            salary_min: 180000,
-            salary_max: 220000,
+            title: 'Founding AI Platform Engineer',
+            company_name: 'Acme AI',
+            location: 'Remote (US)',
+            salary_min: 200000,
+            salary_max: 260000,
             fit_score: 0.92,
             status: 'new',
             source: 'LinkedIn',
             posted_at: new Date(Date.now() - 86400000).toISOString(),
-            description: '<h3>About the Role</h3><p>We are looking for a Senior Software Engineer to join our growing team.</p><h3>Requirements</h3><ul><li>5+ years of experience</li><li>Strong TypeScript skills</li><li>Experience with React</li></ul>',
-            matched_skills: ['TypeScript', 'React', 'Node.js', 'PostgreSQL'],
+            description: '<h3>About the Role</h3><p>Build the orchestration layer for our agent platform.</p><h3>Requirements</h3><ul><li>Strong Python + async</li><li>Workflow orchestration (Temporal or similar)</li><li>LLM integration experience</li></ul>',
+            matched_skills: ['Python', 'FastAPI', 'Temporal', 'LLM integration'],
             missing_skills: ['Kubernetes'],
             requirements: [
-                { text: '5+ years of software engineering experience', met: true },
-                { text: 'Strong TypeScript/JavaScript skills', met: true },
-                { text: 'Experience with React or Vue', met: true },
+                { text: '5+ years building backend systems', met: true },
+                { text: 'Durable workflow orchestration experience', met: true },
+                { text: 'Production LLM/agentic systems', met: true },
                 { text: 'Kubernetes experience preferred', met: false, partial: true }
             ]
         },
         {
             id: 'job-2',
-            title: 'Full Stack Developer',
-            company_name: 'StartupXYZ',
+            title: 'Staff Backend Engineer, Agentic Systems',
+            company_name: 'Orchestra Labs',
             location: 'Remote',
-            salary_min: 140000,
-            salary_max: 170000,
+            salary_min: 190000,
+            salary_max: 240000,
             fit_score: 0.85,
             status: 'interested',
             source: 'Indeed',
             posted_at: new Date(Date.now() - 172800000).toISOString(),
-            description: '<p>Join our fast-paced startup as a Full Stack Developer.</p>',
-            matched_skills: ['JavaScript', 'Python', 'React'],
-            missing_skills: ['Go', 'AWS'],
+            description: '<p>Design fault-tolerant pipelines that coordinate LLMs and external APIs.</p>',
+            matched_skills: ['Python', 'PostgreSQL', 'distributed systems'],
+            missing_skills: ['Go'],
             requirements: [
-                { text: '3+ years of full stack development', met: true },
-                { text: 'Experience with Python backend', met: true },
-                { text: 'AWS or GCP experience', met: false }
+                { text: '5+ years backend / distributed systems', met: true },
+                { text: 'Idempotency & exactly-once delivery', met: true },
+                { text: 'Go experience a plus', met: false, partial: true }
             ]
         },
         {
             id: 'job-3',
-            title: 'Frontend Engineer',
-            company_name: 'DesignCo',
-            location: 'New York, NY',
-            salary_min: 150000,
-            salary_max: 180000,
+            title: 'Forward Deployed Engineer',
+            company_name: 'Vector Systems',
+            location: 'Remote (US)',
+            salary_min: 180000,
+            salary_max: 230000,
             fit_score: 0.78,
             status: 'applied',
             source: 'LinkedIn',
             posted_at: new Date(Date.now() - 604800000).toISOString(),
             applied_at: new Date(Date.now() - 86400000).toISOString(),
-            description: '<p>We need a creative Frontend Engineer to build beautiful interfaces.</p>',
-            matched_skills: ['React', 'CSS', 'TypeScript'],
-            missing_skills: ['Figma', 'Animation'],
+            description: '<p>Work directly with customers to ship AI workflow integrations end to end.</p>',
+            matched_skills: ['Python', 'LLM integration', 'prompt engineering'],
+            missing_skills: ['Rust'],
             requirements: [
-                { text: 'Strong React experience', met: true },
-                { text: 'Eye for design and UX', met: true, partial: true }
+                { text: 'Full-stack ownership of integrations', met: true },
+                { text: 'Comfort in front of customers', met: true, partial: true }
             ]
         },
         {
             id: 'job-4',
-            title: 'Backend Engineer',
+            title: 'Senior Backend Engineer, Workflows',
             company_name: 'DataFlow Inc',
-            location: 'Austin, TX',
-            salary_min: 160000,
-            salary_max: 200000,
+            location: 'Remote',
+            salary_min: 170000,
+            salary_max: 210000,
             fit_score: 0.65,
             status: 'new',
             source: 'Hired',
             posted_at: new Date(Date.now() - 259200000).toISOString(),
-            description: '<p>Build scalable backend systems for our data platform.</p>',
+            description: '<p>Build scalable, event-driven backend systems for our data platform.</p>',
             matched_skills: ['Python', 'PostgreSQL'],
-            missing_skills: ['Kafka', 'Spark', 'Scala'],
+            missing_skills: ['Kafka', 'Spark'],
             requirements: [
-                { text: 'Experience with distributed systems', met: false, partial: true },
+                { text: 'Experience with distributed systems', met: true, partial: true },
                 { text: 'Strong SQL skills', met: true },
                 { text: 'Apache Kafka experience', met: false }
             ]
@@ -1141,7 +1143,7 @@ function loadMockData() {
             id: 'job-5',
             title: 'Platform Engineer',
             company_name: 'CloudNative Co',
-            location: 'Seattle, WA',
+            location: 'Remote',
             salary_max: 250000,
             fit_score: 0.45,
             status: 'new',
@@ -1149,7 +1151,7 @@ function loadMockData() {
             posted_at: new Date(Date.now() - 432000000).toISOString(),
             description: '<p>Help us build our cloud infrastructure platform.</p>',
             matched_skills: ['Docker'],
-            missing_skills: ['Kubernetes', 'Terraform', 'AWS', 'GCP'],
+            missing_skills: ['Kubernetes', 'Terraform', 'AWS'],
             requirements: [
                 { text: 'Deep Kubernetes expertise', met: false },
                 { text: 'Infrastructure as Code (Terraform)', met: false },

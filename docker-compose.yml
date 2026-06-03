@@ -107,7 +107,14 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      # LLM (OpenAI-compatible; defaults to xAI Grok)
+      - LLM_API_KEY=${LLM_API_KEY:-${XAI_API_KEY}}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.x.ai/v1}
+      - LLM_MODEL=${LLM_MODEL:-grok-4-1-fast}
+      - LLM_LIGHT_MODEL=${LLM_LIGHT_MODEL:-grok-3-fast}
       - XAI_API_KEY=${XAI_API_KEY}
+      # Outbound email off by default; flip to true with Gmail OAuth configured
+      - EMAIL_SENDING_ENABLED=${EMAIL_SENDING_ENABLED:-false}
       - SERPAPI_KEY=${SERPAPI_KEY}
       - APOLLO_API_KEY=${APOLLO_API_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}

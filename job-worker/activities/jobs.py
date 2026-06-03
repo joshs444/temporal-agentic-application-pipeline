@@ -10,30 +10,22 @@ import time
 from datetime import datetime
 from typing import Any, Optional
 
+import asyncpg
+import httpx
+from openai import AsyncOpenAI
 from temporalio import activity
+
+# Provider/model config is centralized in utils.llm_config (provider-agnostic).
+from utils.llm_config import LLM_MODEL, get_llm_client as _get_llm_client
 
 # Import will work when running in the job-worker context
 try:
     from clients.serpapi import JobPosting, SerpApiClient, SerpApiError
-    from utils.job_parser import (
-        extract_tech_stack,
-        parse_experience_level,
-        parse_remote_type,
-        parse_salary,
-    )
+    from utils.job_parser import extract_tech_stack, parse_experience_level
 except ImportError:
     # For type checking and development
     from job_worker.clients.serpapi import JobPosting, SerpApiClient, SerpApiError
-    from job_worker.utils.job_parser import (
-        extract_tech_stack,
-        parse_experience_level,
-        parse_remote_type,
-        parse_salary,
-    )
-
-import asyncpg
-import httpx
-from openai import AsyncOpenAI
+    from job_worker.utils.job_parser import extract_tech_stack, parse_experience_level
 
 
 # Configuration
@@ -41,9 +33,6 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://jobhunt:jobhunt_secret@localhost:5433/jobhunt_db"
 )
-
-# Provider/model config is centralized in utils.llm_config (provider-agnostic).
-from utils.llm_config import LLM_MODEL, get_llm_client as _get_llm_client
 
 
 async def get_db_connection() -> asyncpg.Connection:
@@ -272,7 +261,7 @@ Return ONLY the JSON object, no other text."""
         await conn.execute(
             """
             UPDATE jobs
-            SET parsed_requirements = $2,
+            SET requirements_parsed = $2,
                 experience_level = $3,
                 updated_at = NOW()
             WHERE id = $1
@@ -360,7 +349,7 @@ async def _mark_job_inactive(conn: asyncpg.Connection, job_id: str) -> None:
     await conn.execute(
         """
         UPDATE jobs
-        SET status = 'inactive',
+        SET status = 'closed',
             inactive_at = NOW(),
             updated_at = NOW()
         WHERE id = $1
@@ -423,7 +412,7 @@ async def save_jobs_to_db(jobs: list[dict[str, Any]]) -> int:
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                         $11, $12, $13, $14, $15, $16, $17, 'new', NOW(), NOW()
                     )
-                    ON CONFLICT (external_id) DO NOTHING
+                    ON CONFLICT (source, external_id) DO NOTHING
                     """,
                     job_data.get("external_id"),
                     job_data.get("title"),
@@ -687,17 +676,25 @@ Return ONLY the JSON object."""
         except json.JSONDecodeError:
             scoring = {"score": 50, "error": "Failed to parse scoring"}
 
+        # The LLM returns a 0-100 score; jobs.fit_score is constrained to 0-1
+        # while jobs.match_score holds the 0-100 value.
+        raw_score = scoring.get("score", 0) or 0
+        match_score = max(0.0, min(100.0, float(raw_score)))
+        fit_score = match_score / 100.0
+
         # Update job with score
         await conn.execute(
             """
             UPDATE jobs
             SET fit_score = $2,
-                fit_analysis = $3,
+                match_score = $3,
+                fit_analysis = $4,
                 updated_at = NOW()
             WHERE id = $1
             """,
             job_id,
-            scoring.get("score", 0),
+            fit_score,
+            match_score,
             json.dumps(scoring),
         )
 

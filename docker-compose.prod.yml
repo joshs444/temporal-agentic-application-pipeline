@@ -30,7 +30,9 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       # App settings
-      - JOBHUNT_API_KEY=${JOBHUNT_API_KEY:-prod-api-key}
+      - ENVIRONMENT=production
+      - JOBHUNT_API_KEY=${JOBHUNT_API_KEY:?JOBHUNT_API_KEY must be set to a random secret}
+      - EMAIL_SENDING_ENABLED=${EMAIL_SENDING_ENABLED:-false}
       - LOG_LEVEL=info
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1

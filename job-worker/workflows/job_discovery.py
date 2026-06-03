@@ -23,7 +23,6 @@ with workflow.unsafe.imports_passed_through():
         dedupe_jobs,
         parse_job_listing,
         save_job,
-        get_job_by_url,
         update_search_config_last_run,
         log_job_event,
         analyze_resume_for_job_search,
@@ -223,12 +222,7 @@ class JobDiscoveryWorkflow:
                 locations = self._get_locations_list(config)
                 # Database uses 'include_remote', fallback to 'remote_ok'
                 remote_ok = config.get("include_remote", config.get("remote_ok", True))
-                # Map experience_levels to years if needed
-                exp_years = config.get("years_experience_min")
                 salary_min = config.get("salary_min")
-                exclude_companies = config.get("excluded_companies", []) or []
-                target_companies = config.get("target_companies", []) or []
-                posted_within_days = self._get_posted_within_days(config.get("date_posted"))
 
                 # Step 2a: Search for jobs via SearchAPI Google Jobs
                 # Search each keyword/title individually for better results

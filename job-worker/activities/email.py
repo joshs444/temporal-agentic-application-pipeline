@@ -220,10 +220,10 @@ async def _record_sent_email(
     row = await conn.fetchrow("""
         INSERT INTO outreach_emails (
             job_id,
-            to_email,
+            recipient_email,
             to_name,
             subject,
-            body_text,
+            body,
             body_html,
             email_type,
             tracking_id,
@@ -389,7 +389,7 @@ async def _match_reply_to_email(
         row = await conn.fetchrow("""
             SELECT id as email_id, job_id
             FROM outreach_emails
-            WHERE to_email = $1
+            WHERE recipient_email = $1
             ORDER BY sent_at DESC
             LIMIT 1
         """, message.from_email.lower())
@@ -588,35 +588,16 @@ async def _log_llm_call(
     context_type: str,
     context_id: Optional[str] = None,
 ) -> None:
-    """Log LLM API call to database."""
-    conn = await get_connection()
-    try:
-        # Calculate cost (approximate for Grok)
-        cost_cents = (prompt_tokens * 0.001 + completion_tokens * 0.003) / 10
+    """Log an LLM API call via the shared telemetry helper (one cost source)."""
+    from utils.llm_logging import log_llm_call
 
-        await conn.execute("""
-            INSERT INTO llm_logs (
-                model,
-                prompt_tokens,
-                completion_tokens,
-                total_tokens,
-                cost_cents,
-                context_type,
-                context_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        """,
-            model,
-            prompt_tokens,
-            completion_tokens,
-            prompt_tokens + completion_tokens,
-            cost_cents,
-            context_type,
-            uuid.UUID(context_id) if context_id else None,
-        )
-    except Exception as e:
-        log.warning(f"Failed to log LLM call: {e}")
-    finally:
-        await conn.close()
+    await log_llm_call(
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        context_type=context_type,
+        context_id=context_id,
+    )
 
 
 # =============================================================================
@@ -729,7 +710,7 @@ async def generate_outreach_email(
         previous_emails = []
         if email_type != "initial":
             rows = await conn.fetch("""
-                SELECT subject, body_text, email_type, sent_at
+                SELECT subject, body AS body_text, email_type, sent_at
                 FROM outreach_emails
                 WHERE job_id = $1 AND status = 'sent'
                 ORDER BY sent_at ASC
@@ -806,7 +787,6 @@ async def _generate_with_llm(
     custom_hook: Optional[str],
 ) -> dict:
     """Generate email using LLM."""
-    first_name = recipient_name.split()[0] if recipient_name else "there"
 
     # Build context
     job_context = f"""

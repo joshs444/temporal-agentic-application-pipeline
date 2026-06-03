@@ -9,7 +9,7 @@ import os
 from typing import Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from temporalio.client import Client as TemporalClient
 
 from models import (
@@ -17,7 +17,7 @@ from models import (
     ApplicationDraft,
     ApplicationApproval,
 )
-from utils.database import fetch_one, fetch_all, execute, record_to_dict
+from utils.database import fetch_one, execute, record_to_dict
 
 router = APIRouter()
 
@@ -61,8 +61,7 @@ async def trigger_job_discovery(
             detail=f"Temporal service unavailable: {str(e)}"
         )
 
-    # Get search config if provided
-    search_params = {}
+    # Validate the search config if one was provided
     if search_config_id:
         config = await fetch_one(
             "SELECT query_params FROM search_queries WHERE id = $1",
@@ -70,7 +69,6 @@ async def trigger_job_discovery(
         )
         if not config:
             raise HTTPException(status_code=404, detail="Search config not found")
-        search_params = config["query_params"]
 
     workflow_id = f"job-discovery-{uuid4()}"
 
@@ -278,11 +276,7 @@ async def trigger_application(
     try:
         await client.start_workflow(
             "ApplicationWorkflow",
-            {
-                "job_id": str(job_id),
-                "method": method,
-                "generate_draft": True,
-            },
+            args=[str(job_id), method],
             id=workflow_id,
             task_queue=TASK_QUEUE,
         )
@@ -555,18 +549,11 @@ async def trigger_interview_prep(interview_id: UUID) -> WorkflowTriggerResponse:
     workflow_id = f"interview-prep-{interview_id}"
 
     try:
+        # The workflow re-fetches interview/company details via activities, so it
+        # only needs the interview_id (matching InterviewPrepWorkflow.run's signature).
         await client.start_workflow(
             "InterviewPrepWorkflow",
-            {
-                "interview_id": str(interview_id),
-                "stage": interview["stage"],
-                "job_title": interview["title"],
-                "company_name": interview["company_name"],
-                "job_description": interview["description"],
-                "requirements": interview["requirements"],
-                "interviewer_names": interview["interviewer_names"],
-                "interviewer_titles": interview["interviewer_titles"],
-            },
+            args=[str(interview_id)],
             id=workflow_id,
             task_queue=TASK_QUEUE,
         )

@@ -19,11 +19,12 @@ return so the orchestration still runs end to end:
 
 import os
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 import asyncpg
 from temporalio import activity
 
+from utils.llm import extract_json
 from utils.llm_config import LLM_MODEL
 from utils.profile import candidate_first_name
 
@@ -32,6 +33,11 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://jobhunt:jobhunt_secret@localhost:5433/jobhunt_db"
 )
+
+# Real outbound email is OFF by default so the pipeline runs end-to-end safely in
+# demo mode. Set EMAIL_SENDING_ENABLED=true (with Gmail OAuth configured) to send
+# for real via activities.email.send_outreach_email.
+EMAIL_SENDING_ENABLED = os.getenv("EMAIL_SENDING_ENABLED", "false").lower() in ("1", "true", "yes")
 
 
 async def get_db_connection() -> asyncpg.Connection:
@@ -475,7 +481,7 @@ async def parse_job_listing(job_listing: dict) -> dict:
             if isinstance(education, str):
                 try:
                     education = json.loads(education)
-                except:
+                except (json.JSONDecodeError, ValueError):
                     education = []
             elif not isinstance(education, list):
                 education = []
@@ -922,7 +928,7 @@ Be specific and actionable in your analysis."""
                 content = content[4:]
         content = content.strip()
 
-        result = json.loads(content)
+        result = extract_json(content)
 
         # Ensure required fields with defaults
         return {
@@ -1114,24 +1120,36 @@ async def save_contacts(job_id: str, company_id: Optional[str], contacts: list[d
     try:
         import uuid
         for contact in contacts:
-            await conn.execute(
+            # Upsert the contact (deduped by email), then link it to the job
+            # through the contact_jobs join table.
+            row = await conn.fetchrow(
                 """
-                INSERT INTO contacts (id, job_id, company_id, name, email, title,
+                INSERT INTO contacts (id, company_id, name, email, title,
                                     linkedin_url, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+                VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
                 ON CONFLICT (email) DO UPDATE SET
                     title = EXCLUDED.title,
                     linkedin_url = EXCLUDED.linkedin_url,
                     updated_at = NOW()
+                RETURNING id
                 """,
                 uuid.uuid4(),
-                uuid.UUID(job_id),
                 uuid.UUID(company_id) if company_id else None,
                 contact.get("name"),
                 contact.get("email"),
                 contact.get("title"),
                 contact.get("linkedin_url"),
             )
+            if row:
+                await conn.execute(
+                    """
+                    INSERT INTO contact_jobs (contact_id, job_id)
+                    VALUES ($1, $2)
+                    ON CONFLICT (contact_id, job_id) DO NOTHING
+                    """,
+                    row["id"],
+                    uuid.UUID(job_id),
+                )
     finally:
         await conn.close()
 
@@ -1351,22 +1369,34 @@ async def update_application_status(draft_id: str, status: str, reason: str) -> 
 @activity.defn
 async def send_application_email(
     to: str,
+    to_name: str,
     subject: str,
     body: str,
     body_html: Optional[str],
-    attachment: Optional[str],
+    job_id: str,
 ) -> dict:
-    """Send application email via SMTP/Gmail."""
-    activity.logger.info(f"Sending application email to {to}")
+    """Send the application email.
 
-    # Use the email activity from email.py
-    try:
-        from .email import send_outreach_email
-        # Note: This should use the send_outreach_email activity
-        # For now, return placeholder
-        return {"success": False, "error": "Direct email sending not implemented - use workflow"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    Delegates to activities.email.send_outreach_email (real Gmail send) when
+    EMAIL_SENDING_ENABLED is set. Otherwise returns a stubbed success so the
+    orchestration completes end-to-end in demo mode without sending anything.
+    """
+    activity.logger.info(f"Sending application email to {to} (sending_enabled={EMAIL_SENDING_ENABLED})")
+
+    if not EMAIL_SENDING_ENABLED:
+        import uuid
+        return {"success": True, "message_id": f"stub-{uuid.uuid4()}", "stubbed": True}
+
+    from .email import send_outreach_email
+    return await send_outreach_email(
+        to_email=to,
+        to_name=to_name or to,
+        subject=subject,
+        body=body,
+        job_id=job_id,
+        email_type="initial",
+        html_body=body_html,
+    )
 
 
 @activity.defn
@@ -1451,7 +1481,7 @@ async def generate_follow_up_email(
         # Get application and job details
         app = await conn.fetchrow(
             """
-            SELECT a.*, j.title, j.company_name, oe.to_email, oe.gmail_thread_id
+            SELECT a.*, j.title, j.company_name, oe.recipient_email AS to_email, oe.gmail_thread_id
             FROM applications a
             JOIN jobs j ON j.id = a.job_id
             LEFT JOIN outreach_emails oe ON oe.job_id = a.job_id AND oe.status = 'sent'
@@ -1523,12 +1553,41 @@ async def send_follow_up_email(
     body_html: Optional[str],
     thread_id: Optional[str],
 ) -> dict:
-    """Send follow-up email."""
-    activity.logger.info(f"Sending follow-up to {to}")
+    """Send the follow-up email.
 
-    # This should integrate with Gmail client
-    # For now, return placeholder
-    return {"success": False, "error": "Follow-up email sending not yet implemented"}
+    Delegates to activities.email.send_outreach_email (real Gmail send, threaded to
+    the original) when EMAIL_SENDING_ENABLED is set; otherwise returns a stubbed
+    success so the durable follow-up sequence completes in demo mode.
+    """
+    activity.logger.info(f"Sending follow-up to {to} (sending_enabled={EMAIL_SENDING_ENABLED})")
+
+    if not EMAIL_SENDING_ENABLED:
+        import uuid
+        return {"success": True, "message_id": f"stub-{uuid.uuid4()}", "stubbed": True}
+
+    import uuid
+    # Resolve the job_id for this application (required by send_outreach_email).
+    conn = await get_db_connection()
+    try:
+        row = await conn.fetchrow(
+            "SELECT job_id FROM applications WHERE id = $1", uuid.UUID(application_id)
+        )
+    finally:
+        await conn.close()
+    if not row:
+        return {"success": False, "error": "Application not found"}
+
+    from .email import send_outreach_email
+    return await send_outreach_email(
+        to_email=to,
+        to_name=to,
+        subject=subject,
+        body=body,
+        job_id=str(row["job_id"]),
+        email_type="follow_up",
+        html_body=body_html,
+        thread_id=thread_id,
+    )
 
 
 @activity.defn
@@ -1765,7 +1824,7 @@ Make questions SPECIFIC to this job posting, not generic templates."""
                 content = content[4:]
         content = content.strip()
 
-        result = json.loads(content)
+        result = extract_json(content)
 
         # Flatten into unified questions list with type
         questions = []
@@ -1997,7 +2056,7 @@ Guidelines:
                 content = content[4:]
         content = content.strip()
 
-        result = json.loads(content)
+        result = extract_json(content)
 
         return {
             "talking_points": result.get("talking_points", []),
@@ -2122,7 +2181,7 @@ async def save_interview_prep(
 
         await conn.execute(
             """
-            INSERT INTO interview_preps (id, interview_id, prep_data, prep_document, created_at)
+            INSERT INTO interview_prep (id, interview_id, prep_data, prep_document, created_at)
             VALUES ($1, $2, $3, $4, NOW())
             """,
             uuid.UUID(prep_id),
