@@ -412,7 +412,6 @@ async def search_jobs_with_grok(
     Batches keywords into groups of 2 to improve search quality.
     Each batch runs as a separate search, results are combined and deduplicated.
     """
-    import asyncio
     start_time = time.time()
 
     # Batch keywords into groups of 2 for better search focus

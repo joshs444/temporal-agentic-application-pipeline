@@ -37,7 +37,7 @@ async def trigger_discovery_workflow(
     workflow_id = f"scheduled-discovery-{config_id}-{datetime.utcnow().strftime('%Y%m%d%H%M')}"
 
     try:
-        handle = await temporal_client.start_workflow(
+        await temporal_client.start_workflow(
             JobDiscoveryWorkflow.run,
             args=[config_id],
             id=workflow_id,

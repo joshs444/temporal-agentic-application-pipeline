@@ -17,7 +17,7 @@ from models import (
     JobCreate,
     JobListResponse,
 )
-from utils.database import fetch_one, fetch_all, execute, record_to_dict, records_to_dicts
+from utils.database import fetch_one, fetch_all, execute, record_to_dict
 
 router = APIRouter()
 

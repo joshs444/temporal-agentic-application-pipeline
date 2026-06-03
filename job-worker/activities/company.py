@@ -6,12 +6,11 @@ hiring signal detection, and company culture research.
 """
 
 import logging
-import os
 from typing import Optional
 
 from temporalio import activity
 
-from clients.apollo import ApolloClient, Company, Contact
+from clients.apollo import ApolloClient, Company
 from utils.domain_finder import find_domain, normalize_company_name
 
 log = logging.getLogger(__name__)

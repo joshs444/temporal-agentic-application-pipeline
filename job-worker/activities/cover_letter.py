@@ -9,7 +9,6 @@ Usage:
     for job applications.
 """
 
-import json
 import logging
 import time
 from dataclasses import dataclass
@@ -39,6 +38,7 @@ from utils.content_formatter import (
     validate_email,
     clean_text,
 )
+from utils.llm_config import LLM_MODEL, estimate_cost_usd, get_llm_client
 
 log = logging.getLogger(__name__)
 
@@ -46,9 +46,6 @@ log = logging.getLogger(__name__)
 # CONFIGURATION
 # =============================================================================
 # Provider/model config is centralized in utils.llm_config (provider-agnostic).
-
-from utils.llm_config import LLM_MODEL, estimate_cost_usd, get_llm_client
-
 DEFAULT_MODEL = LLM_MODEL
 
 

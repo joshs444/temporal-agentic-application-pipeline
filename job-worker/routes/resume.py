@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from pydantic import BaseModel
 
-from utils.database import fetch_one, fetch_all, execute, record_to_dict, records_to_dicts
+from utils.database import fetch_one, fetch_all, execute, record_to_dict
 from utils.llm_config import LLM_API_KEY, LLM_BASE_URL, LLM_LIGHT_MODEL
 
 router = APIRouter()

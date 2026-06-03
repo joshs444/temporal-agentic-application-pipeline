@@ -30,7 +30,6 @@ from clients.gmail import (
     TokenRevokedError,
     RateLimitError,
     get_valid_access_token,
-    get_stored_credentials,
 )
 
 # Configure logging
@@ -401,8 +400,6 @@ async def poll_inbox(pool: asyncpg.Pool) -> dict:
 
 async def main():
     """Main polling loop."""
-    global shutdown_requested
-
     log.info("Starting JobHunt Gmail inbox poller")
     log.info(f"Database: {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'configured'}")
     log.info(f"Poll interval: {POLL_INTERVAL_SECONDS}s")

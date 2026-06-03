@@ -7,7 +7,6 @@ tailored for job search use cases.
 
 import asyncio
 import hashlib
-import json
 import logging
 import os
 from dataclasses import dataclass, field

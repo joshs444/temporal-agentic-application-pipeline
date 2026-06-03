@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 
 import httpx
-from pydantic import BaseModel
 
 
 # Rate limiting: SerpApi allows 100 requests/month on free tier, more on paid
