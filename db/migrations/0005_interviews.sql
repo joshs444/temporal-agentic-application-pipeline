@@ -72,10 +72,12 @@ CREATE INDEX IF NOT EXISTS idx_interviews_interview_type ON interviews(interview
 CREATE INDEX IF NOT EXISTS idx_interviews_outcome ON interviews(outcome);
 CREATE INDEX IF NOT EXISTS idx_interviews_thank_you_sent ON interviews(thank_you_sent) WHERE thank_you_sent = FALSE;
 
--- Composite index for upcoming interviews
+-- Index for upcoming interviews. The predicate must be IMMUTABLE, so we index
+-- pending interviews by scheduled_at and let queries filter `scheduled_at > NOW()`
+-- at runtime (NOW() is not allowed in an index predicate).
 CREATE INDEX IF NOT EXISTS idx_interviews_upcoming
     ON interviews(scheduled_at)
-    WHERE outcome = 'pending' AND scheduled_at > NOW();
+    WHERE outcome = 'pending';
 
 -- Interview preparation resources table
 CREATE TABLE IF NOT EXISTS interview_prep (
