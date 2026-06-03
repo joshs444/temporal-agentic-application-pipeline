@@ -301,7 +301,9 @@ async def get_company_hiring_signals(company_domain: str) -> dict:
 
 
 @activity.defn
-async def research_company_culture(company_name: str) -> dict:
+async def research_company_culture(
+    company_name: str, company_domain: Optional[str] = None
+) -> dict:
     """
     Research company culture using web search and LLM analysis.
 
@@ -314,6 +316,7 @@ async def research_company_culture(company_name: str) -> dict:
 
     Args:
         company_name: Company name to research
+        company_domain: Optional company domain to disambiguate the search
 
     Returns:
         Dict with culture information:
@@ -341,6 +344,7 @@ async def research_company_culture(company_name: str) -> dict:
 
     result = {
         "company_name": company_name,
+        "company_domain": company_domain,
         "normalized_name": normalized_name,
         "glassdoor_rating": None,
         "culture_summary": None,

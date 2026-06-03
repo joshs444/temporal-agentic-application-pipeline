@@ -6,6 +6,7 @@ Uses durable timers to send follow-ups at strategic intervals.
 Automatically stops when a reply is received.
 """
 
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Optional
@@ -195,10 +196,12 @@ class FollowUpWorkflow:
         follow_ups_sent = []
         final_outcome = "completed"
 
-        # Initial delay if specified
+        # Initial delay if specified. asyncio.sleep inside a workflow is a durable
+        # Temporal timer (survives worker restarts); it is the portable form of the
+        # later workflow.sleep helper.
         if start_delay_days > 0:
             workflow.logger.info(f"Initial delay: waiting {start_delay_days} days")
-            await workflow.sleep(timedelta(days=start_delay_days))
+            await asyncio.sleep(timedelta(days=start_delay_days).total_seconds())
 
         # Execute follow-up sequence
         for step_config in cadence:
@@ -212,7 +215,7 @@ class FollowUpWorkflow:
             # Wait for the specified interval (durable timer)
             if wait_days > 0:
                 workflow.logger.info(f"Waiting {wait_days} days before step {step_num}")
-                await workflow.sleep(timedelta(days=wait_days))
+                await asyncio.sleep(timedelta(days=wait_days).total_seconds())
 
             # Check stop conditions after wait
             if self._stopped:

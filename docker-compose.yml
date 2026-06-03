@@ -113,6 +113,12 @@ services:
       - XAI_API_KEY=${XAI_API_KEY}
       # Outbound email off by default; flip to true with Gmail OAuth configured
       - EMAIL_SENDING_ENABLED=${EMAIL_SENDING_ENABLED:-false}
+      # Gmail inbox poller (reply detection) — opt-in, needs Gmail OAuth. When it
+      # runs it signals the follow-up workflow on reply; the workflow's durable DB
+      # re-check is the always-on backstop either way.
+      - RUN_EMAIL_POLLER=${RUN_EMAIL_POLLER:-false}
+      - ENABLE_TEMPORAL_SIGNALS=${ENABLE_TEMPORAL_SIGNALS:-true}
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-300}
       - SERPAPI_KEY=${SERPAPI_KEY}
       - APOLLO_API_KEY=${APOLLO_API_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}

@@ -1274,17 +1274,23 @@ async def get_best_contact(job_id: str, company_id: Optional[str]) -> Optional[d
     conn = await get_db_connection()
     try:
         import uuid
-        # First try contacts linked to job
+        # First try contacts linked to this job via the contact_jobs join table.
+        # Prefer the explicit relationship, then fall back to title heuristics.
         contact = await conn.fetchrow(
             """
-            SELECT * FROM contacts
-            WHERE job_id = $1
+            SELECT c.* FROM contacts c
+            JOIN contact_jobs cj ON cj.contact_id = c.id
+            WHERE cj.job_id = $1
             ORDER BY
-                CASE WHEN title ILIKE '%recruiter%' THEN 1
-                     WHEN title ILIKE '%talent%' THEN 2
-                     WHEN title ILIKE '%hr%' THEN 3
-                     ELSE 4 END,
-                created_at DESC
+                CASE
+                    WHEN cj.relationship = 'recruiter' THEN 1
+                    WHEN cj.relationship = 'hiring_manager' THEN 2
+                    WHEN c.title ILIKE '%recruiter%' THEN 3
+                    WHEN c.title ILIKE '%talent%' THEN 4
+                    WHEN c.title ILIKE '%hr%' THEN 5
+                    ELSE 6
+                END,
+                c.created_at DESC
             LIMIT 1
             """,
             uuid.UUID(job_id),
@@ -1494,8 +1500,9 @@ async def generate_follow_up_email(
         if not app:
             return {"error": "Application not found"}
 
-        # Generate follow-up based on type
-        first_name = "there"  # Would need contact lookup
+        # Generate follow-up based on type. Use a neutral greeting fallback; this can
+        # be personalized when a contact name is known for the application.
+        first_name = "there"
         company = app["company_name"]
         title = app["title"]
 
@@ -1513,11 +1520,9 @@ Best,
             subject = f"Re: {title} - additional context"
             body = f"""Hi {first_name},
 
-I've been thinking more about the {title} role and wanted to share a quick thought about how I could help with [specific challenge].
+I wanted to follow up once more on the {title} role at {company}. Since reaching out, I've been thinking about where I could contribute most immediately, and I'm confident my background lines up well with what the team is working toward.
 
-In my previous role, I [relevant accomplishment]. I'd love to discuss how this experience could apply to {company}.
-
-Let me know if you have time for a brief conversation.
+If it's useful, I'm happy to share a short summary of relevant work or answer any questions. Would you have time for a brief conversation this week?
 
 Best,
 {candidate_first_name()}"""
