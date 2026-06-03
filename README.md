@@ -1,5 +1,8 @@
 # Temporal Agentic Application Pipeline
 
+[![CI](https://github.com/joshs444/temporal-agentic-application-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/joshs444/temporal-agentic-application-pipeline/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A **durable, human-in-the-loop job-application pipeline** built on
 [Temporal](https://temporal.io). Long-running workflows discover roles, score them
 against a candidate profile with an LLM, draft tailored outreach, **pause for human
@@ -11,8 +14,11 @@ provider-agnostic LLM layer wired to pluggable external-API connectors.
 
 > **What this is, honestly:** an application pipeline used as a vehicle to build
 > production-shaped agentic orchestration. The Temporal layer (signals/queries/timers/
-> retries/HITL gate/child workflows) is complete and real. A few enrichment activities
-> are explicit placeholders — see [Status: implemented vs roadmap](#status-implemented-vs-roadmap).
+> retries/HITL gate/child workflows) is complete and real, and the discover → draft →
+> approve → send → follow-up path runs end to end (outbound email is gated by
+> `EMAIL_SENDING_ENABLED`, default off, so it runs safely in demo mode). A few
+> enrichment activities are explicit placeholders — see
+> [Status: implemented vs roadmap](#status-implemented-vs-roadmap).
 
 ---
 
@@ -81,7 +87,9 @@ The **email poller** watches Gmail for replies and signals the running
    `await workflow.wait_condition(... , timeout=7 days)` until the user sends an
    `approve_send(approved, edits)` signal (or `cancel_application`). It can apply the
    user's edits before sending. `auto_send=True` bypasses the gate.
-6. **Send** — the approved email goes out via Gmail; an application record is created.
+6. **Send** — the approved email is sent via Gmail (when `EMAIL_SENDING_ENABLED=true`;
+   otherwise stubbed in demo mode) and an application record is created — both under a
+   tighter retry policy to avoid duplicate sends.
 7. **Follow up** — `ApplicationWorkflow` spawns a `FollowUpWorkflow` child
    (`followup-{application_id}`) that uses **durable timers** to run a day-5 / day-12 /
    day-21 cadence, exiting early on `reply_received`, `stop_sequence`, or a job-closed check.
@@ -202,6 +210,18 @@ boots and the dashboard/API/Temporal UI are usable without them.
 | Job search | `SERPAPI_KEY` / `SEARCHAPI_KEY` | Google Jobs connectors |
 | Enrichment | `APOLLO_API_KEY` | company + contact data |
 | Email | `GOOGLE_CLIENT_ID/SECRET`, `OAUTH_MASTER_KEY` | Gmail OAuth; tokens encrypted at rest |
+| Outbound email | `EMAIL_SENDING_ENABLED` | off by default (sends stubbed); set `true` to send for real |
+| API auth | `JOBHUNT_API_KEY`, `ENVIRONMENT` | required in production; dev is open only when `ENVIRONMENT=development` and no key set |
+
+### Tests
+
+```bash
+pip install -r job-worker/requirements.txt
+pytest          # unit tests for matching, profile, content + LLM helpers
+ruff check job-worker
+```
+
+CI (GitHub Actions) runs `ruff` + `pytest` on every push/PR.
 
 ---
 
@@ -216,10 +236,12 @@ boots and the dashboard/API/Temporal UI are usable without them.
 │   ├── routes/                  # FastAPI endpoints (jobs, applications, workflows, ...)
 │   ├── utils/                   # llm_config, profile, matching, content formatting
 │   ├── prompts/                 # LLM prompt templates (candidate details injected at runtime)
+│   ├── tests/                   # Unit tests (matching, profile, content + LLM helpers)
 │   ├── worker.py                # Registers workflows + activities on the task queue
 │   └── main.py                  # FastAPI entry point
 ├── frontend/                    # Vanilla-JS dashboard (nginx)
 ├── db/migrations/               # Numbered SQL migrations
+├── .github/workflows/ci.yml     # CI: ruff + pytest
 ├── profile.example.yaml         # Candidate profile template (copy to profile.yaml)
 ├── docker-compose.yml           # Local dev stack
 └── .env.example                 # Environment template (no secrets)
@@ -233,18 +255,23 @@ boots and the dashboard/API/Temporal UI are usable without them.
 
 - The entire Temporal orchestration layer: 5 workflows, signals, queries, the HITL
   approval gate, durable timers, child workflows, retry policies, deterministic IDs.
+- The full discover → enrich → score → draft → approve → send → follow-up path,
+  wired end to end against the database schema (17 migrations).
 - Job discovery (SerpAPI / SearchAPI / Grok web-search), parsing, dedupe.
 - LLM fit-scoring, cover-letter / outreach-email / resume-bullet generation.
-- Gmail send (`activities.email.send_outreach_email`), reply polling + sentiment
-  classification, application + follow-up tracking.
-- FastAPI surface, the dashboard, and the full database schema (16 migrations).
+- Gmail send via `activities.email.send_outreach_email`; the workflow send activities
+  delegate to it when `EMAIL_SENDING_ENABLED=true`, otherwise return a stubbed success
+  so the orchestration completes in demo mode without sending.
+- Reply polling + sentiment classification, application + follow-up tracking.
+- FastAPI surface, the dashboard, and a unit test suite + CI (ruff + pytest).
 
 **Placeholders / roadmap** (clearly marked in code with structured stub returns)
 
-- `send_application_email` / `send_follow_up_email` are thin wrappers; the real,
-  implemented sending path is `activities.email.send_outreach_email`.
 - Interview/company deep-research activities (`research_company_recent`,
-  `research_interviewer`, `research_company_culture`) return `pending_integration` stubs.
+  `research_interviewer`, `research_company_culture`) return `pending_integration`
+  stubs pending an external research/search integration.
+- Outbound email defaults to stubbed (`EMAIL_SENDING_ENABLED=false`); flip it on with
+  Gmail OAuth configured to send for real.
 
 ---
 

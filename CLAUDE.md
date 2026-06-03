@@ -115,8 +115,10 @@ When editing prompts or templates, pull identity from `utils.profile`
 
 - Line length: 100 chars. Type hints everywhere. Docstrings on workflows/activities.
 - Fail fast; no bare `except`. SQL is parameterized only.
-- Tests: pure/fast unit tests plus integration tests.
-- Format/lint with `black` and `ruff`; type-check with `mypy`.
+- Tests live in `job-worker/tests/` — run `pytest` from the repo root. Lint with
+  `ruff check job-worker`. CI (`.github/workflows/ci.yml`) runs both on push/PR.
+- Use `utils.llm.extract_json` for parsing LLM responses and `utils.llm_logging.log_llm_call`
+  for usage/cost telemetry rather than ad-hoc parsing/logging.
 
 ---
 
@@ -125,6 +127,13 @@ When editing prompts or templates, pull identity from `utils.profile`
 Copy `.env.example` to `.env`. Required for full functionality: `LLM_API_KEY`
 (or `XAI_API_KEY`), `SERPAPI_KEY`, `APOLLO_API_KEY`, `DATABASE_URL`, `REDIS_URL`. Optional:
 Gmail OAuth (`GOOGLE_CLIENT_ID/SECRET`, `OAUTH_MASTER_KEY`), SMTP, Slack/Discord webhooks.
+
+Behavior flags:
+- `EMAIL_SENDING_ENABLED` (default `false`) — when off, the send activities return a
+  stubbed success so the pipeline runs end-to-end without sending real email.
+- `ENVIRONMENT` (`development`/`production`) — gates the API-auth dev bypass. In
+  production set `JOBHUNT_API_KEY` to a random secret (the app fails closed without it).
+
 **Never commit real keys** — `.env`, `profile.yaml`, and key files are gitignored.
 
 ---
