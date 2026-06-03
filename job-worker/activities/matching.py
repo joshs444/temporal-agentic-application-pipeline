@@ -21,6 +21,7 @@ from utils.llm import (
 )
 from utils.database import fetch_one, record_to_dict
 from utils.profile import resume_dict
+from utils import profile as profile_module
 
 
 async def get_default_resume_profile() -> Optional[Dict[str, Any]]:
@@ -70,8 +71,8 @@ def convert_db_resume_to_dict(db_resume: Dict[str, Any]) -> Dict[str, Any]:
                         "docker", "kubernetes", "api", "backend", "node", "java", "go"]
     frontend_keywords = ["react", "typescript", "javascript", "css", "tailwind", "vue",
                          "angular", "frontend", "ui", "ux", "html"]
-    domain_keywords = ["mrp", "bom", "erp", "supply chain", "forecasting", "logistics",
-                       "procurement", "dynamics", "sap", "manufacturing"]
+    # Domain-expertise keywords are configured per candidate in the profile.
+    domain_keywords = profile_module.domain_keywords()
 
     for skill in skills_list:
         skill_lower = skill.lower()

@@ -52,6 +52,25 @@ _DEFAULT_PROFILE: dict[str, Any] = {
         "Integrated several third-party APIs into a single orchestrated workflow",
         "Deployed ML/LLM features to production with measurable ROI",
     ],
+    "matching": {
+        # Skills that get extra weight in the fast keyword pre-filter.
+        "boost_skills": [
+            "temporal", "fastapi", "multi-agent", "llm", "autonomous",
+            "workflow orchestration", "prompt engineering", "ai systems",
+            "distributed systems", "event-driven",
+        ],
+        # Keywords used to bucket skills into a "domain expertise" category.
+        "domain_keywords": [
+            "platform", "infrastructure", "distributed systems", "orchestration",
+            "observability", "data pipeline", "mlops", "devops",
+        ],
+        # Metro areas treated as commutable for hybrid roles (metro -> cities).
+        "metro_areas": {
+            "san francisco": ["san francisco", "sf", "bay area", "palo alto", "mountain view"],
+            "new york": ["new york", "nyc", "manhattan", "brooklyn"],
+            "seattle": ["seattle", "bellevue", "redmond"],
+        },
+    },
     "resume": {
         "titles": ["Senior Software Engineer", "Staff Engineer"],
         "summary": "Engineer focused on reliable automation and production AI systems.",
@@ -159,6 +178,26 @@ def background_block() -> str:
 def achievements_block() -> str:
     """Render the achievements as a prompt-ready bullet list."""
     return "\n".join(f"- {line}" for line in achievements())
+
+
+def matching_config() -> dict[str, Any]:
+    """Return the ``matching`` block (skill boosts, domain keywords, metro areas)."""
+    return load_profile().get("matching", _DEFAULT_PROFILE["matching"])
+
+
+def boost_skills() -> set[str]:
+    """Skills that receive extra weight in the fast keyword pre-filter."""
+    return {s.lower() for s in matching_config().get("boost_skills", [])}
+
+
+def domain_keywords() -> list[str]:
+    """Keywords used to bucket skills into a domain-expertise category."""
+    return [k.lower() for k in matching_config().get("domain_keywords", [])]
+
+
+def metro_areas() -> dict[str, list[str]]:
+    """Commutable metro areas for hybrid-role location matching."""
+    return matching_config().get("metro_areas", {})
 
 
 def build_signature(style: str = "default") -> str:

@@ -36,6 +36,37 @@ achievements:
   - "Integrated several third-party APIs into a single orchestrated workflow"
   - "Deployed ML/LLM features to production with measurable ROI"
 
+# Tuning for the fast keyword pre-filter that gates the expensive LLM scoring.
+# All candidate-specific targeting lives here, never in code.
+matching:
+  # Skills that get extra weight when matching a job description.
+  boost_skills:
+    - "temporal"
+    - "fastapi"
+    - "multi-agent"
+    - "llm"
+    - "autonomous"
+    - "workflow orchestration"
+    - "prompt engineering"
+    - "ai systems"
+    - "distributed systems"
+    - "event-driven"
+  # Keywords that bucket skills into a "domain expertise" category.
+  domain_keywords:
+    - "platform"
+    - "infrastructure"
+    - "distributed systems"
+    - "orchestration"
+    - "observability"
+    - "data pipeline"
+    - "mlops"
+    - "devops"
+  # Metro areas treated as commutable for hybrid roles (metro -> nearby cities).
+  metro_areas:
+    "san francisco": ["san francisco", "sf", "bay area", "palo alto", "mountain view"]
+    "new york": ["new york", "nyc", "manhattan", "brooklyn"]
+    "seattle": ["seattle", "bellevue", "redmond"]
+
 # Resume used as the matching fallback when no default profile exists in the DB.
 # (In normal operation the resume is uploaded through the dashboard and stored
 # in the resume_profiles table; this is the offline/bootstrap fallback.)

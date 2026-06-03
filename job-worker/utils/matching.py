@@ -8,6 +8,8 @@ before expensive LLM analysis.
 import re
 from typing import Any, List, Dict, Tuple, Optional
 
+from . import profile
+
 
 def keyword_match_score(job_description: str, skills: List[str]) -> float:
     """
@@ -26,28 +28,22 @@ def keyword_match_score(job_description: str, skills: List[str]) -> float:
     # Normalize text for matching
     job_lower = job_description.lower()
 
-    # Track matches
-    matches = 0
+    # Track weighted match score
     weighted_matches = 0.0
 
-    # Skill weights (more specific = higher weight)
-    high_value_skills = {
-        "temporal", "fastapi", "multi-agent", "llm", "autonomous",
-        "workflow orchestration", "prompt engineering", "ai systems",
-        "supply chain", "mrp", "bom explosion", "demand forecasting"
-    }
+    # Skills that get extra weight — configured per candidate in the profile
+    # (see utils.profile / profile.example.yaml), never hardcoded.
+    high_value_skills = profile.boost_skills()
 
     for skill in skills:
         skill_lower = skill.lower()
 
         # Check for exact or partial match
         if skill_lower in job_lower:
-            matches += 1
             weight = 1.5 if skill_lower in high_value_skills else 1.0
             weighted_matches += weight
         # Check for word variations (e.g., "Python" matches "python3")
         elif any(word in job_lower for word in skill_lower.split()):
-            matches += 0.5
             weighted_matches += 0.5
 
     if not skills:
@@ -138,12 +134,8 @@ def location_match(
 
     # Hybrid - partial match if remote ok
     if "hybrid" in job_lower or job_remote == "hybrid":
-        # Check if in same metro area
-        metro_areas = {
-            "boston": ["boston", "cambridge", "natick", "marlborough", "waltham", "newton"],
-            "new york": ["new york", "nyc", "manhattan", "brooklyn"],
-            "san francisco": ["san francisco", "sf", "bay area", "palo alto", "mountain view"],
-        }
+        # Commutable metro areas come from the candidate profile, not hardcoded.
+        metro_areas = profile.metro_areas()
 
         for metro, cities in metro_areas.items():
             candidate_in_metro = any(city in candidate_lower for city in cities)
