@@ -39,6 +39,7 @@ flowchart TB
         direction TB
         WF["Workflows<br/>Discovery · Enrichment · Application · FollowUp · InterviewPrep"]
         ACT["Activities<br/>discover · parse · score · generate · send · classify"]
+        POLLER["Email poller (opt-in)<br/>Gmail reply detection"]
     end
 
     subgraph ext["External APIs (pluggable connectors)"]
@@ -63,12 +64,14 @@ flowchart TB
     API <--> PG
     ACT -.-> REDIS
     ACT -.-> MINIO
-    GMAIL -- "reply detected" --> API
-    API -- "reply_received signal" --> TS
+    GMAIL -. "reply detected" .-> POLLER
+    POLLER -. "reply_received signal (opt-in)" .-> TS
 ```
 
-The **email poller** watches Gmail for replies and signals the running
-`FollowUpWorkflow` (`reply_received`) so the sequence stops the moment a human responds.
+The **email poller** (opt-in: `RUN_EMAIL_POLLER=true`, needs Gmail OAuth) watches Gmail
+for replies and signals the running `FollowUpWorkflow` (`reply_received`) so the sequence
+stops the moment a human responds. Independently, the follow-up loop re-checks the database
+after every durable timer, so replies are honored even when the poller isn't running.
 
 ---
 
@@ -142,9 +145,10 @@ sequenceDiagram
     make starts idempotent — the same job can't spawn duplicate pipelines.
   - DB writes use `ON CONFLICT` upserts (jobs by `external_id`, companies by `domain`,
     contacts by `email`); enrichment is skipped when `enriched_at` is set.
-  - **Belt-and-suspenders reply detection:** the follow-up loop honors the
-    `reply_received` signal *and* re-checks the database after each timer, so a missed
-    signal can't cause an unwanted follow-up.
+  - **Belt-and-suspenders reply detection:** the follow-up loop re-checks the database
+    after every timer (always on) *and* honors a `reply_received` signal from the opt-in
+    email poller for a near-instant stop — so a missed or disabled signal still can't
+    cause an unwanted follow-up.
 - **Why a provider-agnostic LLM layer?** All model config lives in
   [`utils/llm_config.py`](job-worker/utils/llm_config.py). It targets any
   OpenAI-compatible endpoint (default: xAI Grok) via `LLM_BASE_URL` / `LLM_MODEL` /
@@ -211,17 +215,23 @@ boots and the dashboard/API/Temporal UI are usable without them.
 | Enrichment | `APOLLO_API_KEY` | company + contact data |
 | Email | `GOOGLE_CLIENT_ID/SECRET`, `OAUTH_MASTER_KEY` | Gmail OAuth; tokens encrypted at rest |
 | Outbound email | `EMAIL_SENDING_ENABLED` | off by default (sends stubbed); set `true` to send for real |
+| Reply detection | `RUN_EMAIL_POLLER`, `ENABLE_TEMPORAL_SIGNALS`, `POLL_INTERVAL_SECONDS` | opt-in Gmail inbox poller; signals the follow-up workflow on reply (the workflow's DB re-check is always-on) |
 | API auth | `JOBHUNT_API_KEY`, `ENVIRONMENT` | required in production; dev is open only when `ENVIRONMENT=development` and no key set |
 
 ### Tests
 
 ```bash
 pip install -r job-worker/requirements.txt
-pytest          # unit tests for matching, profile, content + LLM helpers
+pytest          # unit tests + Temporal workflow tests (time-skipping)
 ruff check job-worker
 ```
 
-CI (GitHub Actions) runs `ruff` + `pytest` on every push/PR.
+The suite includes **Temporal workflow tests** that drive `ApplicationWorkflow` and
+`FollowUpWorkflow` end to end on Temporal's in-memory time-skipping test server (no real
+cluster needed): they assert the approval gate blocks then proceeds / rejects / cancels /
+times out, that the 5/12/21-day durable timers fire, and that a reply — via signal or the
+DB re-check — short-circuits the sequence. CI (GitHub Actions) runs `ruff` + `pytest` on
+every push/PR.
 
 ---
 
@@ -236,7 +246,7 @@ CI (GitHub Actions) runs `ruff` + `pytest` on every push/PR.
 │   ├── routes/                  # FastAPI endpoints (jobs, applications, workflows, ...)
 │   ├── utils/                   # llm_config, profile, matching, content formatting
 │   ├── prompts/                 # LLM prompt templates (candidate details injected at runtime)
-│   ├── tests/                   # Unit tests (matching, profile, content + LLM helpers)
+│   ├── tests/                   # Unit tests + Temporal workflow tests (time-skipping)
 │   ├── worker.py                # Registers workflows + activities on the task queue
 │   └── main.py                  # FastAPI entry point
 ├── frontend/                    # Vanilla-JS dashboard (nginx)
@@ -263,7 +273,9 @@ CI (GitHub Actions) runs `ruff` + `pytest` on every push/PR.
   delegate to it when `EMAIL_SENDING_ENABLED=true`, otherwise return a stubbed success
   so the orchestration completes in demo mode without sending.
 - Reply polling + sentiment classification, application + follow-up tracking.
-- FastAPI surface, the dashboard, and a unit test suite + CI (ruff + pytest).
+- FastAPI surface, the dashboard, and a test suite — unit tests plus Temporal workflow
+  tests (time-skipping) that exercise the approval gate, rejection/cancel/timeout paths,
+  and the follow-up timers — with CI (ruff + pytest).
 
 **Placeholders / roadmap** (clearly marked in code with structured stub returns)
 
