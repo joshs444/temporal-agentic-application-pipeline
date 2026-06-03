@@ -261,9 +261,17 @@ async def process_reply(
             WHERE job_id = $1
         """, match["job_id"], classification["summary"])
 
-    # Signal waiting workflows if enabled
+    # Signal the running follow-up workflow if enabled (near-instant stop on reply).
+    # FollowUpWorkflow is keyed by application_id, so resolve it from the job.
+    # The durable DB re-check inside FollowUpWorkflow is the always-on backstop if
+    # the poller is not running or the signal is missed.
     if ENABLE_TEMPORAL_SIGNALS:
-        await signal_workflow(match["job_id"], classification)
+        app_row = await conn.fetchrow(
+            "SELECT id FROM applications WHERE job_id = $1 ORDER BY created_at DESC LIMIT 1",
+            match["job_id"],
+        )
+        if app_row:
+            await signal_workflow(str(app_row["id"]), classification)
 
     return {
         "email_id": str(match["email_id"]),
@@ -273,16 +281,17 @@ async def process_reply(
     }
 
 
-async def signal_workflow(job_id: str, classification: dict) -> None:
-    """Signal any waiting Temporal workflow about the reply."""
+async def signal_workflow(application_id: str, classification: dict) -> None:
+    """Signal the running FollowUpWorkflow for this application about the reply."""
     try:
         from temporalio.client import Client
 
         client = await Client.connect(TEMPORAL_ADDRESS)
 
-        # Try to signal workflow (may not exist)
+        # FollowUpWorkflow is started as followup-{application_id} by ApplicationWorkflow.
+        # If it isn't running, the signal raises and we just rely on the DB re-check.
         try:
-            handle = client.get_workflow_handle(f"job-outreach-{job_id}")
+            handle = client.get_workflow_handle(f"followup-{application_id}")
             await handle.signal(
                 "reply_received",
                 {
@@ -291,9 +300,9 @@ async def signal_workflow(job_id: str, classification: dict) -> None:
                     "suggested_action": classification.get("suggested_action", ""),
                 },
             )
-            log.info(f"Signaled workflow for job {job_id}")
+            log.info(f"Signaled follow-up workflow for application {application_id}")
         except Exception as e:
-            log.debug(f"No active workflow to signal for job {job_id}: {e}")
+            log.debug(f"No active follow-up workflow to signal for {application_id}: {e}")
 
     except Exception as e:
         log.warning(f"Failed to signal workflow: {e}")

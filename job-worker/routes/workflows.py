@@ -61,10 +61,12 @@ async def trigger_job_discovery(
             detail=f"Temporal service unavailable: {str(e)}"
         )
 
-    # Validate the search config if one was provided
+    # Validate the search config if one was provided. Validate against the same
+    # table the discovery workflow actually reads (search_configs) so any id that
+    # passes here is one JobDiscoveryWorkflow can load.
     if search_config_id:
         config = await fetch_one(
-            "SELECT query_params FROM search_queries WHERE id = $1",
+            "SELECT id FROM search_configs WHERE id = $1",
             search_config_id
         )
         if not config:
@@ -84,7 +86,7 @@ async def trigger_job_discovery(
         # Update last_run_at if using a search config
         if search_config_id:
             await execute(
-                "UPDATE search_queries SET last_run_at = NOW() WHERE id = $1",
+                "UPDATE search_configs SET last_run_at = NOW() WHERE id = $1",
                 search_config_id
             )
 
@@ -411,6 +413,15 @@ async def approve_application(
         )
 
     if not approval.approved:
+        # Tell the running workflow to stop waiting at the approval gate (best-effort)
+        # so it resolves immediately instead of sitting until the 7-day timeout.
+        try:
+            client = await get_temporal_client()
+            handle = client.get_workflow_handle(f"application-{job_id}")
+            await handle.signal("approve_send", args=[False, None])
+        except Exception:
+            pass
+
         # Mark as withdrawn/rejected
         await execute(
             """
@@ -473,9 +484,10 @@ async def approve_application(
         client = await get_temporal_client()
         workflow_id = f"application-{job_id}"
 
-        # Try to signal the running workflow
+        # Signal the running workflow's approve_send(approved, edits) handler.
+        # The signal name and positional args must match ApplicationWorkflow.approve_send.
         handle = client.get_workflow_handle(workflow_id)
-        await handle.signal("approve_submission", {"approved": True, "edits": approval.edits})
+        await handle.signal("approve_send", args=[True, approval.edits])
 
         return WorkflowTriggerResponse(
             status="approved",

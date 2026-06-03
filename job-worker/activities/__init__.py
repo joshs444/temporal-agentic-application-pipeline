@@ -50,7 +50,7 @@ from .email import (
     process_reply,
 )
 
-# Additional activities needed by workflows (placeholders for now)
+# Additional activities used by the workflows (discovery, application, follow-up, etc.)
 from .workflow_activities import (
     # Job discovery
     search_jobs_searchapi,
