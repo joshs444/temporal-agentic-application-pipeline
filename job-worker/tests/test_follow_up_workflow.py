@@ -6,6 +6,7 @@ post-timer database re-check is an always-on backstop when no signal arrives. Al
 activities are mocked, so no database, LLM, or network access is required.
 """
 
+import asyncio
 import uuid
 
 import pytest
@@ -117,7 +118,7 @@ async def test_reply_signal_stops_sequence():
                 FollowUpWorkflow.reply_received,
                 {"sentiment": "positive", "summary": "interested"},
             )
-            result = await handle.result()
+            result = await asyncio.wait_for(handle.result(), timeout=60)
 
             assert result["outcome"] == "replied"
             assert result["total_follow_ups"] == 0
@@ -136,7 +137,7 @@ async def test_db_recheck_stops_sequence_without_signal():
                 id=f"followup-{uuid.uuid4()}",
                 task_queue=TASK_QUEUE,
             )
-            result = await handle.result()
+            result = await asyncio.wait_for(handle.result(), timeout=60)
 
             assert result["outcome"] == "replied"
             assert result["total_follow_ups"] == 0
@@ -154,7 +155,7 @@ async def test_full_cadence_sends_three_follow_ups():
                 id=f"followup-{uuid.uuid4()}",
                 task_queue=TASK_QUEUE,
             )
-            result = await handle.result()
+            result = await asyncio.wait_for(handle.result(), timeout=60)
 
             assert result["outcome"] == "completed"
             assert result["total_follow_ups"] == 3

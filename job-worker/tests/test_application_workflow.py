@@ -7,6 +7,7 @@ are mocked, so no database, LLM, or network access is required — only the in-m
 Temporal test server (downloaded on first run).
 """
 
+import asyncio
 import uuid
 
 import pytest
@@ -160,6 +161,21 @@ def _worker(client) -> Worker:
     )
 
 
+async def _await_stage(handle, stage, tries=100):
+    """Poll the workflow's status query until it reaches the given stage.
+
+    The workflow advances through several stages before the approval gate; an
+    immediate query can catch an earlier one, so wait for the target stage.
+    """
+    status = {}
+    for _ in range(tries):
+        status = await handle.query(ApplicationWorkflow.get_status)
+        if status["stage"] == stage:
+            return status
+        await asyncio.sleep(0.02)
+    raise AssertionError(f"workflow never reached stage {stage!r}; last status={status}")
+
+
 @pytest.mark.asyncio
 async def test_approval_gate_proceeds_on_approve():
     """The workflow blocks at the gate, then sends and completes once approved."""
@@ -172,13 +188,12 @@ async def test_approval_gate_proceeds_on_approve():
                 task_queue=TASK_QUEUE,
             )
 
-            # It should be parked at the approval gate, not finished.
-            status = await handle.query(ApplicationWorkflow.get_status)
-            assert status["stage"] == "awaiting_approval"
+            # It should park at the approval gate (not finish) until approved.
+            status = await _await_stage(handle, "awaiting_approval")
             assert status["approval_received"] is False
 
             await handle.signal(ApplicationWorkflow.approve_send, args=[True, None])
-            result = await handle.result()
+            result = await asyncio.wait_for(handle.result(), timeout=60)
 
             assert result["success"] is True
             assert result["email_sent"] is True
@@ -197,7 +212,7 @@ async def test_approval_gate_times_out_after_seven_days():
                 task_queue=TASK_QUEUE,
             )
             # No signal: the test server skips time to the timeout.
-            result = await handle.result()
+            result = await asyncio.wait_for(handle.result(), timeout=60)
 
             assert result["success"] is False
             assert result["error"] == "Approval timeout"
@@ -215,7 +230,7 @@ async def test_approval_gate_rejects_on_disapprove():
                 task_queue=TASK_QUEUE,
             )
             await handle.signal(ApplicationWorkflow.approve_send, args=[False, None])
-            result = await handle.result()
+            result = await asyncio.wait_for(handle.result(), timeout=60)
 
             assert result["success"] is False
             assert result.get("rejected") is True
@@ -233,7 +248,7 @@ async def test_application_cancelled():
                 task_queue=TASK_QUEUE,
             )
             await handle.signal(ApplicationWorkflow.cancel_application)
-            result = await handle.result()
+            result = await asyncio.wait_for(handle.result(), timeout=60)
 
             assert result["success"] is False
             assert result.get("cancelled") is True
