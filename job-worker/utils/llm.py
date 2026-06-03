@@ -6,8 +6,9 @@ All provider configuration lives in ``utils.llm_config``.
 """
 
 import json
+import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .llm_config import LLM_MODEL, get_llm_client
 
@@ -16,6 +17,28 @@ DEFAULT_MODEL = LLM_MODEL
 
 # Backwards-compatible alias: existing call sites import ``get_xai_client``.
 get_xai_client = get_llm_client
+
+
+def extract_json(content: Optional[str]) -> Any:
+    """Best-effort parse of a JSON value from an LLM response.
+
+    Handles ```json fenced blocks, raw JSON, and JSON embedded in prose. Returns
+    an empty dict on failure rather than raising, so callers degrade gracefully.
+    """
+    if not content:
+        return {}
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", content, re.S)
+    candidate = (fenced.group(1) if fenced else content).strip()
+    try:
+        return json.loads(candidate)
+    except (json.JSONDecodeError, ValueError):
+        match = re.search(r"(\{.*\}|\[.*\])", candidate, re.S)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except (json.JSONDecodeError, ValueError):
+                return {}
+        return {}
 
 
 async def analyze_job_fit(job_description: str, resume: Dict[str, Any]) -> Dict[str, Any]:
